@@ -57,6 +57,14 @@ test("--geojson outputs a FeatureCollection", async () => {
   assert.equal(queryOf(cli.mt.last()).get("f"), "geojson");
 });
 
+test("--count and --geojson together is a usage error (exit 2), no request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations", "--count", "--geojson"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /--count and --geojson cannot be combined/);
+});
+
 test("--limit / --order-by / --fields are forwarded", async () => {
   const cli = makeCli(() => jsonResponse(fx.stations));
   await run(["stations", "--limit", "5", "--order-by", "Ort ASC", "--fields", "Ort,Typ"], cli.deps);

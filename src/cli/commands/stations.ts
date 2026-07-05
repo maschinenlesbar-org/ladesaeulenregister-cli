@@ -56,6 +56,9 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .option("--geojson", "output a GeoJSON FeatureCollection instead of ArcGIS JSON")
     .action(
       action(deps, async ({ client, global, opts }) => {
+        if (opts["count"] === true && opts["geojson"] === true) {
+          throw new LadesaeulenValidationError("--count and --geojson cannot be combined.");
+        }
         const q = buildStationQuery(opts);
         if (opts["count"] === true) {
           renderJson(deps, global, await client.count(q));
