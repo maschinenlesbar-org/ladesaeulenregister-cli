@@ -1,0 +1,94 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { LadesaeulenClient, DEFAULT_FIELDS } from "../src/client/client.js";
+import { LadesaeulenApiError } from "../src/client/errors.js";
+import { makeMockTransport, jsonResponse, queryOf } from "./helpers.js";
+import * as fx from "./fixtures.js";
+
+function clientFor(body: unknown) {
+  const mt = makeMockTransport(() => jsonResponse(body));
+  return { client: new LadesaeulenClient({ transport: mt.transport }), mt };
+}
+
+test("stations() GETs /0/query with f=json, default where/outFields, no geometry", async () => {
+  const { client, mt } = clientFor(fx.stations);
+  const page = await client.stations();
+  const q = queryOf(mt.last());
+  assert.equal(new URL(mt.last().url).pathname.endsWith("/0/query"), true);
+  assert.equal(q.get("f"), "json");
+  assert.equal(q.get("where"), "1=1");
+  assert.equal(q.get("outFields"), DEFAULT_FIELDS);
+  assert.equal(q.get("returnGeometry"), "false");
+  assert.equal(page.features.length, 2);
+  assert.equal(page.exceededTransferLimit, false);
+  assert.equal(page.features[0]?.attributes.Ort, "Düsseldorf");
+});
+
+test("stations() forwards where/limit/offset/order-by/fields", async () => {
+  const { client, mt } = clientFor(fx.stations);
+  await client.stations({ where: "Ort='Berlin'", limit: 5, offset: 10, orderBy: "Ort ASC", outFields: "Ort,Typ" });
+  const q = queryOf(mt.last());
+  assert.equal(q.get("where"), "Ort='Berlin'");
+  assert.equal(q.get("resultRecordCount"), "5");
+  assert.equal(q.get("resultOffset"), "10");
+  assert.equal(q.get("orderByFields"), "Ort ASC");
+  assert.equal(q.get("outFields"), "Ort,Typ");
+});
+
+test("count() sends returnCountOnly and returns the number", async () => {
+  const { client, mt } = clientFor(fx.countOnly);
+  const n = await client.count({ where: "Typ='Schnellladeeinrichtung'" });
+  const q = queryOf(mt.last());
+  assert.equal(q.get("returnCountOnly"), "true");
+  assert.equal(q.has("outFields"), false); // not requested for a count
+  assert.equal(n, 660);
+});
+
+test("a spatial near query sends geometry/distance/units/spatialRel", async () => {
+  const { client, mt } = clientFor(fx.stations);
+  await client.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 2 } });
+  const q = queryOf(mt.last());
+  assert.equal(q.get("geometry"), "13.405,52.52");
+  assert.equal(q.get("geometryType"), "esriGeometryPoint");
+  assert.equal(q.get("inSR"), "4326");
+  assert.equal(q.get("distance"), "2000"); // km -> m
+  assert.equal(q.get("units"), "esriSRUnit_Meter");
+  assert.equal(q.get("spatialRel"), "esriSpatialRelIntersects");
+});
+
+test("an ArcGIS error envelope (HTTP 200) throws LadesaeulenApiError", async () => {
+  const { client } = clientFor(fx.arcgisError);
+  await assert.rejects(
+    () => client.stations({ where: "BOGUS=1" }),
+    (err) =>
+      err instanceof LadesaeulenApiError &&
+      err.arcgisCode === 400 &&
+      /Unable to complete operation/.test(err.message) &&
+      /Invalid field: BOGUS/.test(err.message),
+  );
+});
+
+test("countBy() sends outStatistics group-by and maps rows to {value, count}", async () => {
+  const { client, mt } = clientFor(fx.countByState);
+  const rows = await client.countBy("state");
+  const q = queryOf(mt.last());
+  assert.equal(q.get("groupByFieldsForStatistics"), "state");
+  assert.match(q.get("outStatistics") ?? "", /"statisticType":"count"/);
+  assert.deepEqual(rows[0], { value: "Bayern", count: 21969 });
+  assert.equal(rows.length, 3);
+});
+
+test("fields() GETs the layer metadata and returns the fields", async () => {
+  const { client, mt } = clientFor(fx.fields);
+  const fields = await client.fields();
+  assert.equal(new URL(mt.last().url).pathname.endsWith("/0"), true);
+  assert.equal(queryOf(mt.last()).get("f"), "json");
+  assert.equal(fields[0]?.name, "Betreiber");
+});
+
+test("geojson() requests f=geojson and returns the FeatureCollection", async () => {
+  const { client, mt } = clientFor(fx.geojson);
+  const gj = (await client.geojson({ where: "Ort='Berlin'" })) as { type?: string };
+  assert.equal(queryOf(mt.last()).get("f"), "geojson");
+  assert.equal(gj.type, "FeatureCollection");
+});
