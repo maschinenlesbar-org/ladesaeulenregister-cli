@@ -82,6 +82,18 @@ test("--near with --radius issues a spatial query", async () => {
   assert.equal(q.get("distance"), "1500");
 });
 
+test("--near far outside Germany warns about a likely lat/lon swap", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  await run(["stations", "--near", "13.405,52.52", "--radius", "1", "--count"], cli.deps); // swapped
+  assert.match(cli.err.join("\n"), /outside Germany.*swap/s);
+});
+
+test("--near inside Germany prints no swap note", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations", "--near", "52.52,13.405", "--radius", "1"], cli.deps);
+  assert.doesNotMatch(cli.err.join("\n"), /outside Germany/);
+});
+
 test("--near without --radius is a usage error and issues no request", async () => {
   const cli = makeCli(() => jsonResponse(fx.stations));
   const code = await run(["stations", "--near", "52.52,13.405"], cli.deps);

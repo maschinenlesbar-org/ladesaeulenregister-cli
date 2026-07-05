@@ -16,6 +16,15 @@ import {
   renderJson,
 } from "../shared.js";
 
+/**
+ * Roughly Germany's bounding box (generous margins). Used only to catch a likely
+ * latitude/longitude swap in `--near` (both numbers are valid lat AND lon, so the
+ * parser cannot tell them apart).
+ */
+function isOutsideGermany(lat: number, lon: number): boolean {
+  return lat < 47 || lat > 56 || lon < 5 || lon > 16;
+}
+
 /** Build a StationQuery from this command's parsed options. */
 function buildStationQuery(opts: Record<string, unknown>): StationQuery {
   const q: StationQuery = {};
@@ -60,6 +69,12 @@ export function registerCommands(program: Command, deps: CliDeps): void {
           throw new LadesaeulenValidationError("--count and --geojson cannot be combined.");
         }
         const q = buildStationQuery(opts);
+        if (q.near && isOutsideGermany(q.near.lat, q.near.lon)) {
+          deps.io.err(
+            `Note: --near point (lat ${q.near.lat}, lon ${q.near.lon}) is outside Germany — ` +
+              "did you swap latitude and longitude? --near expects lat,lon.",
+          );
+        }
         if (opts["count"] === true) {
           renderJson(deps, global, await client.count(q));
         } else if (opts["geojson"] === true) {
