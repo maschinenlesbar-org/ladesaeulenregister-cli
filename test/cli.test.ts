@@ -28,6 +28,21 @@ test("stations renders { features, exceededTransferLimit } and hits /0/query", a
   assert.equal(parsed.exceededTransferLimit, false);
 });
 
+test("prints a stderr note when the page is capped (exceededTransferLimit)", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ features: [{ attributes: { ID: "1" } }], exceededTransferLimit: true }),
+  );
+  const code = await run(["stations", "--limit", "2000"], cli.deps);
+  assert.equal(code, 0);
+  assert.match(cli.err.join("\n"), /more stations match/);
+});
+
+test("no cap note when exceededTransferLimit is false", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations"], cli.deps);
+  assert.doesNotMatch(cli.err.join("\n"), /more stations match/);
+});
+
 test("--count prints only the number", async () => {
   const cli = makeCli(() => jsonResponse(fx.countOnly));
   await run(["stations", "--where", "Typ='Schnellladeeinrichtung'", "--count"], cli.deps);

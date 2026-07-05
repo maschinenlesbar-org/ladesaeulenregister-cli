@@ -41,7 +41,12 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .command("stations")
     .description("Search charging stations (Ladeeinrichtungen)")
     .option("--where <sql>", "SQL filter, e.g. \"Ort='Berlin' AND Typ='Schnellladeeinrichtung'\"", parseNonEmpty)
-    .option("--limit <n>", "max rows to return (1..10000)", parseBoundedInt(1, 10000), 50)
+    .option(
+      "--limit <n>",
+      "max rows per request (1..10000; the server returns at most ~2000 — page with --offset)",
+      parseBoundedInt(1, 10000),
+      50,
+    )
     .option("--offset <n>", "rows to skip (for paging)", parseIntArg)
     .option("--order-by <spec>", "sort, e.g. \"Ort ASC\" or \"max_electric_power_station DESC\"", parseNonEmpty)
     .option("--fields <list>", "comma-separated field list, or '*' for all (see `fields`)", parseNonEmpty)
@@ -57,7 +62,14 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         } else if (opts["geojson"] === true) {
           renderJson(deps, global, await client.geojson(q));
         } else {
-          renderJson(deps, global, await client.stations(q));
+          const page = await client.stations(q);
+          if (page.exceededTransferLimit) {
+            deps.io.err(
+              "Note: more stations match than were returned (the server caps a page at ~2000 rows). " +
+                "Page with --offset, or narrow --where.",
+            );
+          }
+          renderJson(deps, global, page);
         }
       }),
     );

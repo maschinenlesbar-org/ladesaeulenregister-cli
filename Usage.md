@@ -25,7 +25,7 @@ ladesaeulen [global options] <command> [command options]
 | Option | Description |
 |---|---|
 | `--where <sql>` | SQL filter, e.g. `"Ort='Berlin' AND Typ='Schnellladeeinrichtung'"` |
-| `--limit <n>` | max rows (1..10000, default 50) |
+| `--limit <n>` | max rows per request (1..10000, default 50). The server returns **at most ~2000** — page the rest with `--offset` |
 | `--offset <n>` | rows to skip (paging) |
 | `--order-by <spec>` | sort, e.g. `"max_electric_power_station DESC"` |
 | `--fields <list>` | comma-separated field list, or `'*'` for all |
@@ -35,7 +35,8 @@ ladesaeulen [global options] <command> [command options]
 | `--geojson` | output a GeoJSON FeatureCollection instead of ArcGIS JSON |
 
 Default output is `{ features, exceededTransferLimit }` — `exceededTransferLimit:
-true` means more matched than were returned (page or narrow the filter).
+true` means more matched than were returned (the server caps a page at ~2000 rows).
+The CLI prints a stderr note in that case; page with `--offset` or narrow `--where`.
 
 ### `count-by <field>` — grouped counts
 
