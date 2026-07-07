@@ -77,7 +77,7 @@ ladesaeulen fields --compact | jq '.[].name'
 |---|---|
 | `0` | success (help/version included); an empty result also exits 0 |
 | `1` | API/logical error (the ArcGIS `error` envelope), or a catch-all |
-| `2` | usage error (bad flags, unknown command, `--near` without `--radius`, redirecting base URL) |
+| `2` | usage error (bad flags, unknown command, `--near` without `--radius`, a non-`http(s)` or malformed `--base-url`, redirecting base URL) |
 | `4` | HTTP 404 |
 | `6` | network / transport failure (DNS, connection, timeout, response size-cap) |
 

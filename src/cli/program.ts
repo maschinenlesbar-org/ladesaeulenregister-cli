@@ -8,7 +8,7 @@ import { Command } from "commander";
 import type { CliDeps } from "./io.js";
 import { defaultIO } from "./io.js";
 import { LadesaeulenClient } from "../client/client.js";
-import { parseIntArg, parseBoundedInt, parseHeaderValue, parseNonEmpty } from "./shared.js";
+import { parseIntArg, parseBoundedInt, parseHeaderValue, parseBaseUrl } from "./shared.js";
 import { registerCommands } from "./commands/stations.js";
 
 /**
@@ -51,7 +51,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .option(
       "--base-url <url>",
       "API base URL (the ArcGIS FeatureServer)",
-      parseNonEmpty,
+      parseBaseUrl,
       "https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeulen/FeatureServer",
     )
     .option("--timeout <ms>", "per-request timeout in ms (0 = no timeout)", parseIntArg)
