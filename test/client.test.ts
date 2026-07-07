@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LadesaeulenClient, DEFAULT_FIELDS } from "../src/client/client.js";
-import { LadesaeulenApiError } from "../src/client/errors.js";
-import { makeMockTransport, jsonResponse, queryOf } from "./helpers.js";
+import { LadesaeulenApiError, LadesaeulenParseError } from "../src/client/errors.js";
+import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 function clientFor(body: unknown) {
@@ -87,6 +87,15 @@ test("an ArcGIS error envelope with control chars is stripped before it reaches 
       assert.match(err.message, /hinthere/);
       return true;
     },
+  );
+});
+
+test("an empty 200 body surfaces as a typed LadesaeulenParseError, not a raw TypeError", async () => {
+  const mt = makeMockTransport(() => rawResponse("", "application/json", 200));
+  const client = new LadesaeulenClient({ transport: mt.transport });
+  await assert.rejects(
+    () => client.stations(),
+    (err) => err instanceof LadesaeulenParseError && /Expected a JSON object/.test(err.message),
   );
 });
 

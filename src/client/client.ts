@@ -11,7 +11,7 @@
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
 import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
-import { LadesaeulenApiError } from "./errors.js";
+import { LadesaeulenApiError, LadesaeulenParseError } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import type {
   ArcGisQueryResponse,
@@ -65,7 +65,17 @@ export class LadesaeulenClient {
     params: QueryParams,
   ): Promise<T> {
     const res = await this.engine.getJson<T>(path, params);
-    const err = res?.error;
+    // Every query/metadata endpoint answers with a JSON envelope object. A null
+    // (empty/204 body) or non-object reply means the endpoint did not return the
+    // expected shape; surface it as a typed parse error rather than letting a
+    // downstream `res.features`/`res.count` dereference throw a raw TypeError that
+    // is reported as an "Unexpected error".
+    if (res === null || typeof res !== "object") {
+      throw new LadesaeulenParseError(
+        `Expected a JSON object from ${path} but received ${res === null ? "an empty body" : typeof res}.`,
+      );
+    }
+    const err = res.error;
     if (err && typeof err === "object") {
       // The ArcGIS `error` message/details come from the (attacker-controllable)
       // response body and flow into an Error.message printed raw to stderr; strip
