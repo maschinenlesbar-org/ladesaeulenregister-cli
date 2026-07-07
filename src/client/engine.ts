@@ -43,6 +43,33 @@ export interface EngineOptions {
 
 const DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Strip control characters out of a string that originates in an
+ * attacker-controlled response — the ArcGIS `error` detail and the non-JSON body
+ * snippet — before it flows into a `LadesaeulenApiError.message` that run.ts
+ * prints raw to stderr. `JSON.parse` decodes an escaped ESC (a backslash-u-001b
+ * sequence) in an error body into a real ESC byte, so without this a hostile or
+ * MITM'd endpoint could inject
+ * ANSI/OSC terminal escape sequences (screen clears, title changes, output
+ * spoofing) when the message reaches the user's terminal. The success path is
+ * already safe (`JSON.stringify` escapes these). Removes all C0 controls (except
+ * tab/newline), DEL, and the C1 range; implemented via char codes so this source
+ * file never contains a raw control byte.
+ */
+export function sanitizeServerText(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    const n = ch.codePointAt(0) ?? 0;
+    if (n === 0x09 || n === 0x0a) {
+      out += ch;
+      continue;
+    }
+    if (n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f)) continue;
+    out += ch;
+  }
+  return out;
+}
+
 const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -150,6 +177,10 @@ export class RequestEngine {
         detail = snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
       }
     }
+    // `detail` came from the attacker-controlled response body; strip control
+    // characters so a hostile endpoint cannot drive terminal escape sequences
+    // into stderr via the error message.
+    if (detail !== undefined) detail = sanitizeServerText(detail);
     return new LadesaeulenApiError({ status, url, method: "GET", body: text, detail });
   }
 }

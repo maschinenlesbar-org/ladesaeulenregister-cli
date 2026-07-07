@@ -68,6 +68,28 @@ test("an ArcGIS error envelope (HTTP 200) throws LadesaeulenApiError", async () 
   );
 });
 
+test("an ArcGIS error envelope with control chars is stripped before it reaches stderr", async () => {
+  // Built via char codes so no raw control byte appears in this source file.
+  const ESC = String.fromCharCode(0x1b);
+  const BEL = String.fromCharCode(0x07);
+  const evil = { error: { code: 400, message: `bad${ESC}[2Jclause`, details: [`hint${BEL}here`] } };
+  const { client } = clientFor(evil);
+  await assert.rejects(
+    () => client.stations({ where: "BOGUS=1" }),
+    (err) => {
+      assert.ok(err instanceof LadesaeulenApiError);
+      const hasControl = [...err.message].some((c) => {
+        const n = c.charCodeAt(0);
+        return n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f);
+      });
+      assert.ok(!hasControl);
+      assert.match(err.message, /bad\[2Jclause/);
+      assert.match(err.message, /hinthere/);
+      return true;
+    },
+  );
+});
+
 test("countBy() sends outStatistics group-by and maps rows to {value, count}", async () => {
   const { client, mt } = clientFor(fx.countByState);
   const rows = await client.countBy("state");

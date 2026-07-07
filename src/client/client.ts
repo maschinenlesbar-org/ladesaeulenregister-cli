@@ -10,7 +10,7 @@
 //   await c.countBy("state");            // stations per Bundesland
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
-import { RequestEngine, type EngineOptions } from "./engine.js";
+import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
 import { LadesaeulenApiError } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import type {
@@ -67,8 +67,12 @@ export class LadesaeulenClient {
     const res = await this.engine.getJson<T>(path, params);
     const err = res?.error;
     if (err && typeof err === "object") {
+      // The ArcGIS `error` message/details come from the (attacker-controllable)
+      // response body and flow into an Error.message printed raw to stderr; strip
+      // control characters so a hostile endpoint cannot inject terminal escapes.
       const detail = [err.message, ...(Array.isArray(err.details) ? err.details : [])]
         .filter((s): s is string => typeof s === "string" && s.length > 0)
+        .map(sanitizeServerText)
         .join("; ");
       throw new LadesaeulenApiError({
         url: this.engine.buildUrl(path, params),
