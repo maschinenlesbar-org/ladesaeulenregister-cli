@@ -1,6 +1,6 @@
 {
   "name": "@maschinenlesbar.org/ladesaeulenregister-cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "TypeScript API client and CLI for the Ladesäulenregister — the Bundesnetzagentur's register of public EV charging stations in Germany",
   "type": "module",
   "bin": {
