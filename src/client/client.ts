@@ -155,6 +155,14 @@ export class LadesaeulenClient {
       orderByFields: "count DESC",
     };
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
+    // `?? []` only catches a missing field; a truthy non-array (e.g. a cache or
+    // upstream serving an unexpected shape) would otherwise reach `.map` below as
+    // a raw TypeError.
+    if (res.features !== undefined && !Array.isArray(res.features)) {
+      throw new LadesaeulenParseError(
+        `Expected "features" to be an array in the response from ${LAYER}/query, got ${typeof res.features}.`,
+      );
+    }
     return (res.features ?? []).map((f) => ({
       value: (f.attributes[field] as string | number | null) ?? null,
       count: Number(f.attributes["count"] ?? 0),
@@ -167,6 +175,11 @@ export class LadesaeulenClient {
       LAYER,
       { f: "json" },
     );
+    if (res.fields !== undefined && !Array.isArray(res.fields)) {
+      throw new LadesaeulenParseError(
+        `Expected "fields" to be an array in the response from ${LAYER}, got ${typeof res.fields}.`,
+      );
+    }
     return res.fields ?? [];
   }
 }

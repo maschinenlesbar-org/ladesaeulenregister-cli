@@ -117,6 +117,22 @@ test("fields() GETs the layer metadata and returns the fields", async () => {
   assert.equal(fields[0]?.name, "Betreiber");
 });
 
+test("countBy() throws LadesaeulenParseError when features is not an array", async () => {
+  const { client } = clientFor({ features: { message: "unexpected shape" } });
+  await assert.rejects(
+    () => client.countBy("state"),
+    (err) => err instanceof LadesaeulenParseError && /"features".*array.*\/0\/query/.test(err.message),
+  );
+});
+
+test("fields() throws LadesaeulenParseError when fields is not an array", async () => {
+  const { client } = clientFor({ fields: { message: "unexpected shape" } });
+  await assert.rejects(
+    () => client.fields(),
+    (err) => err instanceof LadesaeulenParseError && /"fields".*array.*\/0/.test(err.message),
+  );
+});
+
 test("geojson() requests f=geojson and returns the FeatureCollection", async () => {
   const { client, mt } = clientFor(fx.geojson);
   const gj = (await client.geojson({ where: "Ort='Berlin'" })) as { type?: string };
