@@ -1,5 +1,7 @@
 # ladesaeulenregister-cli
 
+**Website:** [English](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/de/) — command reference, guides and API docs
+
 A dependency-light **TypeScript client + CLI** for the **Ladesäulenregister** — the
 Bundesnetzagentur's register of public EV charging stations in Germany (~111k
 Ladeeinrichtungen). Backed by a public **ArcGIS FeatureServer**. A
