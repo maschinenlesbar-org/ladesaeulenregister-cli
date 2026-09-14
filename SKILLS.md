@@ -1,6 +1,6 @@
 # Skills
 
-`ladesaeulenregister-cli` ships **Claude Code Agent Skills** as a plugin marketplace,
+`ladesaeulenregister-cli` ships **Claude Code Agent Skills** as a Claude Code plugin,
 so Claude can drive the `ladesaeulen` CLI for common charging-station tasks. The
 skills **validate** that the `ladesaeulen` CLI is on your PATH and tell you if it is
 missing — they never install anything.
@@ -24,10 +24,18 @@ They compose: **search → near**, or **search → stats**.
 
 ## Installing the plugin
 
-This repo is a Claude Code plugin marketplace (`.claude-plugin/marketplace.json` +
-`.claude-plugin/plugin.json` + `skills/`). Add it as a marketplace in Claude Code to
-enable the three skills. The `skills/` and `.claude-plugin/` files are **not** shipped
-in the npm tarball — the published package is the client/CLI only.
+This repo is a Claude Code plugin (`.claude-plugin/plugin.json` + `skills/`),
+published as `ladesaeulen` in the
+[maschinenlesbar.org plugin marketplace](https://github.com/maschinenlesbar-org/plugins).
+Install it inside Claude Code to enable the three skills:
+
+```
+/plugin marketplace add maschinenlesbar-org/plugins
+/plugin install ladesaeulen@maschinenlesbar
+```
+
+The `skills/` and `.claude-plugin/` files are **not** shipped in the npm tarball — the
+published package is the client/CLI only.
 
 The data these skills surface is the Bundesnetzagentur's, under **CC BY 4.0**
 (attribution required) — see [DATA_LICENSE.md](DATA_LICENSE.md). Cite the source.
