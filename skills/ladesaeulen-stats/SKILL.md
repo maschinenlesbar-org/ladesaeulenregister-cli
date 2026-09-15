@@ -27,7 +27,7 @@ This skill drives the `ladesaeulen` command. **Before anything else, validate it
 ```bash
 ladesaeulen count-by state       # stations per Bundesland
 ladesaeulen count-by Typ         # Normal- vs Schnellladeeinrichtung
-ladesaeulen count-by Betreiber   # per operator (which has the most?)
+ladesaeulen count-by operator_companyName   # per operator (which has the most?)
 ladesaeulen count-by Ort         # per city
 ```
 
@@ -42,7 +42,7 @@ ladesaeulen count-by state --where "Typ='Schnellladeeinrichtung'" --compact
 
 ```bash
 # Top 10 operators by number of stations
-ladesaeulen count-by Betreiber --compact | jq '.[:10]'
+ladesaeulen count-by operator_companyName --compact | jq '.[:10]'
 
 # Normal vs fast split, as a quick table
 ladesaeulen count-by Typ --compact | jq -r '.[] | "\(.value)\t\(.count)"'
@@ -59,8 +59,17 @@ echo "fast: $fast / total: $total"
   just a page, so it is exact and cheap. Prefer it over paging + counting yourself.
 - **Group by a real column** — confirm the field name with `ladesaeulen fields`
   (they include German umlauts, e.g. `Straße`).
-- **High-cardinality groups can be long** (`count-by Ort`/`Betreiber` returns many
-  rows) — slice with `jq '.[:N]'`.
+- **Group operators by `operator_companyName`, not `Betreiber`.** `Betreiber` is `null`
+  on more than half of all stations, so `count-by Betreiber` puts a `null` group first
+  (17,327 of 31,188 fast chargers on 2026-09-15) and misses big operators such as Tesla
+  and IONITY. `operator_companyName` has no `null` group. Its names are the operator's
+  legal entities, so one brand can appear under several (`EnBW mobility+ AG und Co.KG `,
+  `EnBW Ostwürttemberg DonauRies AG`); say so when you rank.
+- **High-cardinality groups are long and capped** — `count-by Ort` and
+  `count-by operator_companyName` stop at **2,000 groups** (the server's page limit;
+  the CLI prints no note). The top of the list is still right, because the server sorts
+  by count before cutting, so slice with `jq '.[:N]'`; but don't report the length as
+  "the number of cities/operators". Narrow with `--where` if you need every group.
 - **It counts stations (Ladeeinrichtungen), not charge points** — a station can have
   several `Anzahl_Ladepunkte`; say which the user wants.
 - Cite the source: © Bundesnetzagentur, Ladesäulenregister (CC BY 4.0).
