@@ -57,6 +57,24 @@ test("--geojson outputs a FeatureCollection", async () => {
   assert.equal(queryOf(cli.mt.last()).get("f"), "geojson");
 });
 
+test("DEL and C1 control characters in server data are escaped in the JSON output", async () => {
+  const controls = String.fromCharCode(0x7f, 0x85, 0x9b) + "2J";
+  const esc = String.fromCharCode(0x1b) + "[31m";
+  const served = {
+    features: [{ attributes: { ...fx.stations.features[0]!.attributes, Ort: `Düsseldorf${controls}`, Betreiber: esc } }],
+    exceededTransferLimit: false,
+  };
+  for (const format of [[], ["--compact"]]) {
+    const cli = makeCli(() => jsonResponse(served));
+    assert.equal(await run([...format, "stations"], cli.deps), 0);
+    const text = cli.out.join("\n");
+    const raw = [...text].filter((c) => c.charCodeAt(0) < 0x20 ? c !== "\n" : c.charCodeAt(0) >= 0x7f && c.charCodeAt(0) <= 0x9f);
+    assert.deepEqual(raw, [], format.join(" "));
+    assert.match(text, /Düsseldorf\\u007f\\u0085\\u009b2J/);
+    assert.deepEqual(JSON.parse(text), served);
+  }
+});
+
 test("--count and --geojson together is a usage error (exit 2), no request", async () => {
   const cli = makeCli(() => jsonResponse(fx.stations));
   const code = await run(["stations", "--count", "--geojson"], cli.deps);
