@@ -36,7 +36,8 @@ ladesaeulen stations --near 52.52,13.405 --radius 1 --count
 
 # Fast chargers within 3 km, key columns
 ladesaeulen stations --near 52.5163,13.3777 --radius 3 --where "Typ='Schnellladeeinrichtung'" \
-  --limit 100 --compact | jq '.features[].attributes | {Betreiber, Straße, Ort, max_electric_power_station}'
+  --limit 100 --compact \
+  | jq '.features[].attributes | {operator_companyName, "Straße": ."Straße", Hausnummer, Ort, max_electric_power_station}'
 
 # The same as GeoJSON (for a map)
 ladesaeulen stations --near 52.52,13.405 --radius 2 --geojson --limit 200 > nearby.geojson
@@ -53,4 +54,12 @@ ladesaeulen stations --near 52.52,13.405 --radius 2 --geojson --limit 200 > near
 - **Raise `--limit`** if you need all nearby stations (default is small); a `true`
   `exceededTransferLimit` means there are more.
 - **`--geojson`** is ideal when the answer feeds a map.
+- **Umlaut field names need quoting in `jq`.** The `{Straße}` shorthand is a jq compile
+  error; write `{"Straße": ."Straße"}` or `."Straße"`.
+- **Take the operator from `operator_companyName`.** `Betreiber` is `null` on more than
+  half of all stations (48 of the 76 fast chargers within 3 km of the Brandenburger Tor
+  on 2026-09-15).
+- **`max_electric_power_station` is text** (`"150"`). Filter with
+  `CAST(max_electric_power_station AS FLOAT) >= 150`, not `max_electric_power_station >= 150`
+  (ArcGIS error 400); see the **ladesaeulen-search** skill.
 - Cite the source: © Bundesnetzagentur, Ladesäulenregister (CC BY 4.0).
