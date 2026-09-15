@@ -18,6 +18,8 @@ export const stations = {
         state: "Nordrhein-Westfalen",
         Typ: "Normalladeeinrichtung",
         Status: "In Betrieb",
+        max_electric_power_station: "22",
+        Anzahl_Ladepunkte: "2",
         coordinates_latitude: 51.169901,
         coordinates_longitude: 6.876787,
         OBJECTID: 1,

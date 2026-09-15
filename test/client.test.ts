@@ -24,6 +24,17 @@ test("stations() GETs /0/query with f=json, default where/outFields, no geometry
   assert.equal(page.features[0]?.attributes.Ort, "Düsseldorf");
 });
 
+test("stations() types power and charge-point count as the strings the layer returns", async () => {
+  // Live on 2026-09-15 `fields` lists both columns as esriFieldTypeString and
+  // rows carry "22" / "2", not numbers.
+  const { client } = clientFor(fx.stations);
+  const page = await client.stations();
+  const power: string | undefined = page.features[0]?.attributes.max_electric_power_station;
+  const points: string | undefined = page.features[0]?.attributes.Anzahl_Ladepunkte;
+  assert.equal(power, "22");
+  assert.equal(points, "2");
+});
+
 test("stations() forwards where/limit/offset/order-by/fields", async () => {
   const { client, mt } = clientFor(fx.stations);
   await client.stations({ where: "Ort='Berlin'", limit: 5, offset: 10, orderBy: "Ort ASC", outFields: "Ort,Typ" });

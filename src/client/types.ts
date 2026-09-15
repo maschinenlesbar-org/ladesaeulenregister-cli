@@ -30,10 +30,14 @@ export interface ChargingStation {
   Status?: string;
   coordinates_latitude?: number;
   coordinates_longitude?: number;
-  /** Max electric power of the station, in kW. */
-  max_electric_power_station?: number;
-  /** Number of charge points. */
-  Anzahl_Ladepunkte?: number;
+  /**
+   * Max electric power of the station, in kW, as a decimal string (`"150"`,
+   * `"3.7"`): the column is `esriFieldTypeString`. Filter and sort it with
+   * `CAST(max_electric_power_station AS FLOAT)`.
+   */
+  max_electric_power_station?: string;
+  /** Number of charge points, as a string (`"2"`; the column is `esriFieldTypeString`). */
+  Anzahl_Ladepunkte?: string;
   go_live_date?: string;
   Bezahlsystem?: string;
   /** Any other column the layer carries. */
