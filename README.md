@@ -7,8 +7,8 @@
 **Website:** [English](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/de/) — command reference, guides and API docs
 
 A dependency-light **TypeScript client + CLI** for the **Ladesäulenregister** — the
-Bundesnetzagentur's register of public EV charging stations in Germany (116,343
-Ladeeinrichtungen on 2026-09-15). Backed by a public **ArcGIS FeatureServer**. A
+Bundesnetzagentur's register of public EV charging stations in Germany (about 116,000
+Ladeeinrichtungen as of September 2026). Backed by a public **ArcGIS FeatureServer**. A
 [bund.dev](https://bund.dev) API.
 
 - **No API key.** The public charging-station data is open.
