@@ -1,5 +1,9 @@
 # ladesaeulenregister-cli
 
+[![CI](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/actions/workflows/ci.yml)
+[![Release](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/actions/workflows/release.yml/badge.svg)](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/actions/workflows/release.yml)
+[![npm](https://img.shields.io/npm/v/@maschinenlesbar.org/ladesaeulenregister-cli)](https://www.npmjs.com/package/@maschinenlesbar.org/ladesaeulenregister-cli)
+
 **Website:** [English](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/de/) — command reference, guides and API docs
 
 A dependency-light **TypeScript client + CLI** for the **Ladesäulenregister** — the
