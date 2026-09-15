@@ -54,7 +54,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
       parseBaseUrl,
       "https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeulen/FeatureServer",
     )
-    .option("--timeout <ms>", "per-request timeout in ms (0 = no timeout)", parseIntArg)
+    .option("--timeout <ms>", "time limit per request in ms, whole response included (0 = no timeout)", parseIntArg)
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option("--max-retries <n>", "retries for transient 429/503 responses (0..10)", parseBoundedInt(0, 10))
     .option(
