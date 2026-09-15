@@ -57,7 +57,11 @@ export function registerCommands(program: Command, deps: CliDeps): void {
       50,
     )
     .option("--offset <n>", "rows to skip (for paging)", parseIntArg)
-    .option("--order-by <spec>", "sort, e.g. \"Ort ASC\" or \"max_electric_power_station DESC\"", parseNonEmpty)
+    .option(
+      "--order-by <spec>",
+      "sort, e.g. \"Ort ASC\" or \"CAST(max_electric_power_station AS FLOAT) DESC\" (power is a text column)",
+      parseNonEmpty,
+    )
     .option("--fields <list>", "comma-separated field list, or '*' for all (see `fields`)", parseNonEmpty)
     .option("--near <lat,lon>", "only stations near this WGS84 point (needs --radius)", parseLatLon)
     .option("--radius <km>", "search radius in km for --near", parsePositiveFloat)
@@ -95,7 +99,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
   program
     .command("count-by")
     .description("Count stations grouped by a field, e.g. `count-by state` (per Bundesland)")
-    .argument("<field>", "field to group by (e.g. state, Typ, Betreiber, Ort)", parseNonEmpty)
+    .argument("<field>", "field to group by (e.g. state, Typ, operator_companyName, Ort)", parseNonEmpty)
     .option("--where <sql>", "restrict to matching stations first", parseNonEmpty)
     .action(
       action(deps, async ({ client, global, opts }, [field]) => {

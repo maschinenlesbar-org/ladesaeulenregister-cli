@@ -27,7 +27,7 @@ ladesaeulen [global options] <command> [command options]
 | `--where <sql>` | SQL filter, e.g. `"Ort='Berlin' AND Typ='Schnellladeeinrichtung'"` |
 | `--limit <n>` | max rows per request (1..10000, default 50). The server returns **at most ~2000** — page the rest with `--offset` |
 | `--offset <n>` | rows to skip (paging) |
-| `--order-by <spec>` | sort, e.g. `"max_electric_power_station DESC"` |
+| `--order-by <spec>` | sort, e.g. `"Ort ASC"` or `"CAST(max_electric_power_station AS FLOAT) DESC"` (power is a text column; without the cast it sorts as text) |
 | `--fields <list>` | comma-separated field list, or `'*'` for all |
 | `--near <lat,lon>` | only stations near this WGS84 point (needs `--radius`) |
 | `--radius <km>` | search radius in km for `--near` |
@@ -41,7 +41,10 @@ The CLI prints a stderr note in that case; page with `--offset` or narrow `--whe
 ### `count-by <field>` — grouped counts
 
 `ladesaeulen count-by state` → `[{ value, count }, …]`, sorted by count desc. Add
-`--where` to aggregate a subset. Good fields: `state`, `Typ`, `Betreiber`, `Ort`.
+`--where` to aggregate a subset. Good fields: `state`, `Typ`, `operator_companyName`, `Ort`
+(`Betreiber` is `null` on more than half of the stations). The result stops at 2,000
+groups (the server's page limit, no note is printed); the top groups are still correct
+because the server sorts by count first.
 
 ### `fields` — list queryable columns
 
@@ -53,8 +56,11 @@ The CLI prints a stderr note in that case; page with `--offset` or narrow `--whe
 Standard Esri SQL over the layer's columns:
 
 - strings are **case-sensitive and single-quoted**: `Ort='Berlin'`, `state='Bayern'`
-- partial match: `Betreiber LIKE '%EnBW%'`
-- numbers unquoted: `max_electric_power_station >= 150`, `Anzahl_Ladepunkte > 2`
+- partial match: `operator_companyName LIKE '%EnBW%'`
+- `max_electric_power_station` and `Anzahl_Ladepunkte` are **text** columns (`esriFieldTypeString`
+  in `fields`); cast them to compare as numbers:
+  `CAST(max_electric_power_station AS FLOAT) >= 150`, `CAST(Anzahl_Ladepunkte AS INTEGER) > 2`.
+  An unquoted `max_electric_power_station >= 150` fails with ArcGIS error 400
 - combine with `AND`/`OR`; the default is `1=1` (all rows)
 
 Common fields: `Ort`, `Postleitzahl`, `state`, `Betreiber`, `operator_companyName`,
@@ -64,7 +70,7 @@ Common fields: `Ort`, `Postleitzahl`, `state`, `Betreiber`, `operator_companyNam
 ## Examples
 
 ```bash
-ladesaeulen stations --count                                        # 111524
+ladesaeulen stations --count                                        # 116343 on 2026-09-15
 ladesaeulen stations --where "state='Berlin'" --count
 ladesaeulen count-by Typ --compact
 ladesaeulen stations --near 52.5163,13.3777 --radius 2 --where "Typ='Schnellladeeinrichtung'" --geojson

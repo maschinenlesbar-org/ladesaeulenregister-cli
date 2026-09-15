@@ -7,8 +7,8 @@
 **Website:** [English](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/de/) — command reference, guides and API docs
 
 A dependency-light **TypeScript client + CLI** for the **Ladesäulenregister** — the
-Bundesnetzagentur's register of public EV charging stations in Germany (~111k
-Ladeeinrichtungen). Backed by a public **ArcGIS FeatureServer**. A
+Bundesnetzagentur's register of public EV charging stations in Germany (116,343
+Ladeeinrichtungen on 2026-09-15). Backed by a public **ArcGIS FeatureServer**. A
 [bund.dev](https://bund.dev) API.
 
 - **No API key.** The public charging-station data is open.
@@ -30,9 +30,10 @@ npm install @maschinenlesbar.org/ladesaeulenregister-cli
 ## CLI
 
 ```bash
-ladesaeulen stations --count                                   # total public stations → 111524
-ladesaeulen stations --where "Ort='Berlin' AND Typ='Schnellladeeinrichtung'" --count   # → 660
-ladesaeulen stations --near 52.52,13.405 --radius 1 --count    # within 1 km of a point → 124
+# (counts as of 2026-09-15)
+ladesaeulen stations --count                                   # total public stations → 116343
+ladesaeulen stations --where "Ort='Berlin' AND Typ='Schnellladeeinrichtung'" --count   # → 695
+ladesaeulen stations --near 52.52,13.405 --radius 1 --count    # within 1 km of a point → 127
 ladesaeulen stations --where "state='Bayern'" --limit 20       # a page of stations
 ladesaeulen stations --geojson --limit 200 > stations.geojson  # GeoJSON for a map
 ladesaeulen count-by state                                     # stations per Bundesland
@@ -42,10 +43,11 @@ ladesaeulen fields                                             # the queryable c
 - **`stations`** searches with an SQL `--where`, paging (`--limit`/`--offset`),
   sorting (`--order-by`), field selection (`--fields`), a spatial `--near`/`--radius`,
   and `--count` (just the number) or `--geojson` output.
-- **`count-by <field>`** aggregates (e.g. per `state`, `Typ`, `Betreiber`).
+- **`count-by <field>`** aggregates (e.g. per `state`, `Typ`, `operator_companyName`).
 - **`fields`** lists the queryable columns (build `--where`/`--fields`/`count-by`).
 
-Filter values are **SQL, case-sensitive, single-quoted** (`Ort='Berlin'`). Global
+Filter values are **SQL, case-sensitive, single-quoted** (`Ort='Berlin'`). Power is a
+text column, so compare it with `CAST(max_electric_power_station AS FLOAT) >= 150`. Global
 flags: `--base-url`, `--timeout`, `--user-agent`, `--max-retries`,
 `--max-response-bytes`, `--compact`. See [Usage.md](Usage.md).
 

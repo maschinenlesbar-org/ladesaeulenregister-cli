@@ -55,7 +55,7 @@ operational layers) is:
 https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeulen/FeatureServer/0
 ```
 
-~111k charging stations, anonymous. This is the `DEFAULT_BASE_URL` (the
+116,343 charging stations on 2026-09-15, anonymous. This is the `DEFAULT_BASE_URL` (the
 `/FeatureServer` part; the client appends `/0`). If it moves again, override
 `--base-url` and re-trace the map app.
 

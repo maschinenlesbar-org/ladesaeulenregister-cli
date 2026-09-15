@@ -43,7 +43,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .name("ladesaeulen")
     .description(
       "CLI for the Ladesäulenregister — the Bundesnetzagentur's register of public EV " +
-        "charging stations in Germany (~111k Ladeeinrichtungen). No API key needed. " +
+        "charging stations in Germany (over 100k Ladeeinrichtungen). No API key needed. " +
         "`stations` searches with an SQL --where, paging, spatial --near/--radius, --count " +
         "or --geojson; `count-by` aggregates (e.g. per Bundesland); `fields` lists the " +
         "queryable columns.",

@@ -1,6 +1,6 @@
 // LadesaeulenClient — a typed client over the Ladesäulenregister of the
 // Bundesnetzagentur, a public ArcGIS FeatureServer of German EV charging stations
-// (~111k Ladeeinrichtungen; layer 0). No auth.
+// (over 100k Ladeeinrichtungen; layer 0). No auth.
 //
 // The ArcGIS server answers HTTP 200 even for logical errors, carrying them in an
 // `error` object — the client checks for it and throws.
