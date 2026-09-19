@@ -7,8 +7,11 @@ description: >
   address / these coordinates?", or wants a spatial search around a point. Runs a
   radius query on the Bundesnetzagentur Ladesäulenregister and returns the nearby
   stations (optionally as GeoJSON).
-version: 1.0.0
-userInvocable: true
+compatibility: >
+  Requires the `ladesaeulen` CLI (npm package
+  @maschinenlesbar.org/ladesaeulenregister-cli) on PATH, installed by the user;
+  the skill never installs it. Uses jq for JSON filtering. Network access to
+  services-eu1.arcgis.com (Bundesnetzagentur).
 ---
 
 # Ladesäulen Near
@@ -19,6 +22,8 @@ near here?".
 ## Tooling
 
 This skill drives the `ladesaeulen` command. **Before anything else, validate it is available** — run `command -v ladesaeulen` (or `ladesaeulen --version`). If it is not on your PATH, STOP and inform the user that the `ladesaeulen` CLI (`@maschinenlesbar.org/ladesaeulenregister-cli`) is not installed — installing it is their responsibility; never install it yourself, and do not fall back to `npx` or a local `node dist/...` build.
+
+This skill also filters JSON with `jq`. **Validate it too** — run `command -v jq`. If it is missing, inform the user that `jq` is not installed — installing it is their responsibility; never install it yourself — and carry on without it: filter the CLI output with `node -e` instead (Node is already on your PATH, since the CLI runs on it).
 
 **No API key is required.** The register is a public ArcGIS FeatureServer. This skill uses `ladesaeulen stations --near <lat,lon> --radius <km>` (both required together); combine with `--where`, `--count`, `--geojson`, `--limit`. `--compact` for `jq`. Data © Bundesnetzagentur under CC BY 4.0 (attribution required) — see DATA_LICENSE.md.
 
