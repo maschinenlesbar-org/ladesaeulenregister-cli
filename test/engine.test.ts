@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RequestEngine } from "../src/client/engine.js";
-import { LadesaeulenApiError, LadesaeulenParseError } from "../src/client/errors.js";
+import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -112,4 +112,19 @@ test("a 503 is retried up to maxRetries then surfaces as a LadesaeulenApiError",
   const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
   await assert.rejects(() => e.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 503);
   assert.equal(calls, 3);
+});
+
+test("the engine rejects a non-http(s) base URL before any request, even with a custom transport", () => {
+  for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
+    const mt = makeMockTransport(() => jsonResponse(fx.stations));
+    assert.throws(
+      () => new RequestEngine({ baseUrl, transport: mt.transport }),
+      (err) => err instanceof LadesaeulenNetworkError && /Unsupported protocol/.test(err.message),
+    );
+    assert.equal(mt.calls.length, 0);
+  }
+});
+
+test("the engine rejects an unparseable base URL", () => {
+  assert.throws(() => new RequestEngine({ baseUrl: "not a url" }), LadesaeulenNetworkError);
 });
