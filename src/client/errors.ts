@@ -62,7 +62,11 @@ export class LadesaeulenApiError extends LadesaeulenError {
 /** A transport-level failure (DNS, connection reset, timeout, ...). */
 export class LadesaeulenNetworkError extends LadesaeulenError {}
 
-/** A client-side validation error (e.g. a bad --near) — no request made. */
+/**
+ * A client-side validation error — a bad CLI option or library argument (a blank
+ * `where`, an out-of-range `near`/`limit`/`offset`, a `countBy` field list). No
+ * request is made.
+ */
 export class LadesaeulenValidationError extends LadesaeulenError {}
 
 /** The response body could not be parsed as the expected JSON shape. */

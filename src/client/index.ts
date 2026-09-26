@@ -1,6 +1,6 @@
 // Public entry point for the API client library.
 
-export { LadesaeulenClient, DEFAULT_FIELDS, MIN_RADIUS_KM, MAX_RADIUS_KM } from "./client.js";
+export { LadesaeulenClient, DEFAULT_FIELDS, MAX_LIMIT, MIN_RADIUS_KM, MAX_RADIUS_KM } from "./client.js";
 export type { LadesaeulenClientOptions } from "./client.js";
 export {
   RequestEngine,

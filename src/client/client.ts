@@ -135,6 +135,56 @@ export const MIN_RADIUS_KM = 0.001;
  */
 export const MAX_RADIUS_KM = 1000;
 
+/** Largest page `stations`/`geojson` ask for (ArcGIS `resultRecordCount`); the server sends at most ~2000. */
+export const MAX_LIMIT = 10_000;
+
+/** A value as it appears in a validation message: strings quoted, the rest as is. */
+function show(value: unknown): string {
+  return typeof value === "string" ? JSON.stringify(value) : String(value);
+}
+
+function invalid(name: string, expected: string, value: unknown): LadesaeulenValidationError {
+  return new LadesaeulenValidationError(`Invalid ${name}: expected ${expected}, got ${show(value)}.`);
+}
+
+/** A present text parameter must be a non-blank string (ArcGIS reads `where=` as an error, not "all"). */
+function checkText(name: string, value: unknown): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || value.trim() === "") throw invalid(name, "a non-empty string", value);
+}
+
+function checkInt(name: string, value: unknown, min: number, max: number): void {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) {
+    throw invalid(name, `an integer from ${min} to ${max}`, value);
+  }
+}
+
+function checkNumber(name: string, value: unknown, min: number, max: number): void {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+    throw invalid(name, `a number from ${min} to ${max}`, value);
+  }
+}
+
+/**
+ * Validate a station query before any request, so a library caller gets a typed
+ * `LadesaeulenValidationError` instead of a remote ArcGIS 400 (or a silently
+ * odd request such as `distance=Infinity` or `resultRecordCount=-3`).
+ */
+function checkQuery(q: StationQuery): void {
+  checkText("where", q.where);
+  checkText("outFields", q.outFields);
+  checkText("orderBy", q.orderBy);
+  checkInt("limit", q.limit, 1, MAX_LIMIT);
+  checkInt("offset", q.offset, 0, Number.MAX_SAFE_INTEGER);
+  if (q.near !== undefined) {
+    if (q.near === null || typeof q.near !== "object") throw invalid("near", "{ lat, lon, radiusKm }", q.near);
+    checkNumber("near.lat", q.near.lat, -90, 90);
+    checkNumber("near.lon", q.near.lon, -180, 180);
+    checkNumber("near.radiusKm", q.near.radiusKm, MIN_RADIUS_KM, MAX_RADIUS_KM);
+  }
+}
+
 /** Options for the client (engine options only — the API needs no auth). */
 export type LadesaeulenClientOptions = EngineOptions;
 
@@ -184,6 +234,7 @@ export class LadesaeulenClient {
 
   /** Build the shared feature-query params (where / outFields / paging / near). */
   private buildParams(q: StationQuery, extra: QueryParams): QueryParams {
+    checkQuery(q);
     const p: QueryParams = { where: q.where ?? "1=1", ...extra };
     if (q.outFields !== undefined) p.outFields = q.outFields;
     if (q.limit !== undefined) p.resultRecordCount = q.limit;
@@ -253,6 +304,7 @@ export class LadesaeulenClient {
    */
   async countByPage(field: string, where = "1=1"): Promise<CountByPage> {
     const name = groupField(field);
+    checkText("where", where);
     const params: QueryParams = {
       where,
       f: "json",

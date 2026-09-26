@@ -321,3 +321,26 @@ test("an ArcGIS error envelope drops a details entry that repeats the message", 
     (err) => err instanceof LadesaeulenApiError && err.detail === "Invalid URL; Try again",
   );
 });
+
+test("the client validates its query before any request (LadesaeulenValidationError)", async () => {
+  const cases: [string, (c: LadesaeulenClient) => Promise<unknown>, string][] = [
+    ["near NaN", (c) => c.count({ near: { lat: Number.NaN, lon: Infinity, radiusKm: -5 } }), "Invalid near.lat: expected a number from -90 to 90, got NaN."],
+    ["lon", (c) => c.count({ near: { lat: 52, lon: 200, radiusKm: 1 } }), "Invalid near.lon: expected a number from -180 to 180, got 200."],
+    ["radius", (c) => c.count({ near: { lat: 52, lon: 13, radiusKm: -5 } }), "Invalid near.radiusKm: expected a number from 0.001 to 1000, got -5."],
+    ["limit", (c) => c.stations({ limit: -3 }), "Invalid limit: expected an integer from 1 to 10000, got -3."],
+    ["offset", (c) => c.stations({ offset: 1.5 }), "Invalid offset: expected an integer from 0 to 9007199254740991, got 1.5."],
+    ["where", (c) => c.count({ where: "" }), 'Invalid where: expected a non-empty string, got "".'],
+    ["orderBy", (c) => c.geojson({ orderBy: " " }), 'Invalid orderBy: expected a non-empty string, got " ".'],
+    ["countBy field", (c) => c.countBy("", ""), 'Invalid field: expected a field name, got "".'],
+    ["countBy where", (c) => c.countBy("state", ""), 'Invalid where: expected a non-empty string, got "".'],
+  ];
+  for (const [label, call, message] of cases) {
+    const { client, mt } = clientFor(fx.countOnly);
+    await assert.rejects(
+      () => call(client),
+      (err) => err instanceof LadesaeulenValidationError && err.message === message,
+      label,
+    );
+    assert.equal(mt.calls.length, 0, label);
+  }
+});

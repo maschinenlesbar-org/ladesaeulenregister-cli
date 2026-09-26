@@ -6,6 +6,7 @@ import type { Command } from "commander";
 import type { CliDeps } from "../io.js";
 import type { StationQuery } from "../../client/types.js";
 import { LadesaeulenValidationError } from "../../client/errors.js";
+import { MAX_LIMIT } from "../../client/client.js";
 import {
   action,
   parseBoundedInt,
@@ -78,7 +79,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .option(
       "--limit <n>",
       "max rows per request (1..10000, default 50; the server returns at most ~2000 — page with --offset)",
-      parseBoundedInt(1, 10000),
+      parseBoundedInt(1, MAX_LIMIT),
     )
     .option("--offset <n>", "rows to skip (for paging)", parseIntArg)
     .option(

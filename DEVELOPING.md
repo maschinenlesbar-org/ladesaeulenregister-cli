@@ -69,6 +69,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   after the response's `Retry-After` (delay-seconds or an IMF-fixdate, parsed strictly by
   `parseRetryAfter`), else after `retryDelayMs * attempt`. A `Retry-After` above
   `MAX_RETRY_AFTER_MS` (30 s) is not retried: the error surfaces at once.
+- **The client validates its own arguments** before any request (not only the CLI):
+  `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
+  `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
+  non-blank `countBy` field → `LadesaeulenValidationError`
+  (`Invalid <name>: expected <what>, got <value>.`).
 - **Long queries go as a POST.** ArcGIS Online answers a GET URL of about 2.9 KB with a
   misleading HTTP 404 (and above about 20 KB with 414). `/query` takes the same parameters
   as an `application/x-www-form-urlencoded` POST body, so the engine switches to a POST to
