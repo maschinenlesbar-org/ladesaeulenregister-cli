@@ -57,13 +57,13 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     )
     .option(
       "--timeout <ms>",
-      "time limit per request in ms, whole response included (0 = no timeout)",
+      "time limit per request in ms, whole response included (default 30000; 0 = no timeout)",
       parseBoundedInt(0, MAX_TIMEOUT_MS),
     )
     .option("--user-agent <ua>", "User-Agent header value", parseHeaderValue)
     .option(
       "--max-retries <n>",
-      "retries for transient 429/503 responses (0..10; each waits the server's Retry-After, up to 30 s)",
+      "retries for transient 429/503 responses (0..10, default 2; each waits the server's Retry-After, up to 30 s)",
       parseBoundedInt(0, 10),
     )
     .option(

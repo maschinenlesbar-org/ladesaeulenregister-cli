@@ -351,3 +351,11 @@ test("--count sends no paging parameters; a plain page still defaults to 50 rows
   assert.equal(await run(["stations"], page.deps), 0);
   assert.equal(queryOf(page.mt.last()).get("resultRecordCount"), "50");
 });
+
+test("--help names the --timeout and --max-retries defaults", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["--help"], cli.deps), 0);
+  const help = cli.out.join("\n").replace(/\s+/g, " ");
+  assert.match(help, /--timeout <ms> .*default 30000/);
+  assert.match(help, /--max-retries <n> .*default 2\b/);
+});
