@@ -92,6 +92,7 @@ function shapeError(path: string, expected: string): LadesaeulenParseError {
 
 /** A short description of a JSON value for a shape error ("null", "a string", …). */
 function kindOf(value: unknown): string {
+  if (value === undefined) return "none";
   if (value === null) return "null";
   if (Array.isArray(value)) return "an array";
   if (typeof value === "object") return "an object";
@@ -244,18 +245,14 @@ export class LadesaeulenClient {
       orderByFields: "count DESC",
     };
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
-    // `?? []` only catches a missing field; a truthy non-array (e.g. a cache or
-    // upstream serving an unexpected shape) would otherwise reach `.map` below as
-    // a raw TypeError.
-    if (res.features !== undefined && !Array.isArray(res.features)) {
-      throw new LadesaeulenParseError(
-        `Expected "features" to be an array in the response from ${LAYER}/query, got ${typeof res.features}.`,
-      );
-    }
-    return (res.features ?? []).map((f, i) => ({
-      value: (groupValue(f.attributes, name, `${LAYER}/query`, i) as string | number | null) ?? null,
-      count: Number(f.attributes["count"] ?? 0),
-    }));
+    const path = `${LAYER}/query`;
+    return featureList(res.features, path).map((f, i) => {
+      const count: unknown = f.attributes["count"];
+      if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+        throw shapeError(path, `a non-negative integer count in every group, group ${i} has ${kindOf(count)}`);
+      }
+      return { value: (groupValue(f.attributes, name, path, i) as string | number | null) ?? null, count };
+    });
   }
 
   /** The layer's field metadata (names/types/aliases) — for building queries. */
@@ -264,11 +261,14 @@ export class LadesaeulenClient {
       LAYER,
       { f: "json" },
     );
-    if (res.fields !== undefined && !Array.isArray(res.fields)) {
-      throw new LadesaeulenParseError(
-        `Expected "fields" to be an array in the response from ${LAYER}, got ${typeof res.fields}.`,
-      );
-    }
-    return res.fields ?? [];
+    const fields: unknown = res.fields;
+    if (!Array.isArray(fields)) throw shapeError(LAYER, "a fields array");
+    fields.forEach((f: unknown, i) => {
+      if (!isObject(f) || typeof f["name"] !== "string") {
+        const what = isObject(f) ? "has no string name" : `is ${kindOf(f)}`;
+        throw shapeError(LAYER, `every field to be a JSON object with a string name, field ${i} ${what}`);
+      }
+    });
+    return fields as FieldInfo[];
   }
 }

@@ -237,3 +237,14 @@ test("a string ArcGIS error in a 200 reply exits 1 with its text", async () => {
   assert.deepEqual(cli.out, []);
   assert.match(cli.err.join("\n"), /^Error: ArcGIS error for GET \S+: Token Required$/);
 });
+
+test("fields and count-by with null entries exit 1 with a parse error, not 'Unexpected error'", async () => {
+  for (const [argv, body] of [
+    [["fields"], { fields: [null, 1, { name: 5 }] }],
+    [["count-by", "state"], { features: [{ attributes: { state: "A", count: 3 } }, { attributes: null }] }],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(body));
+    assert.equal(await run([...argv], cli.deps), 1);
+    assert.match(cli.err.join("\n"), /^Error: Unexpected response shape from /);
+  }
+});

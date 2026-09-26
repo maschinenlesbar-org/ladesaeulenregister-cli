@@ -139,7 +139,9 @@ test("countBy() throws LadesaeulenParseError when features is not an array", asy
   const { client } = clientFor({ features: { message: "unexpected shape" } });
   await assert.rejects(
     () => client.countBy("state"),
-    (err) => err instanceof LadesaeulenParseError && /"features".*array.*\/0\/query/.test(err.message),
+    (err) =>
+      err instanceof LadesaeulenParseError &&
+      err.message === "Unexpected response shape from /0/query: expected a features array.",
   );
 });
 
@@ -147,7 +149,7 @@ test("fields() throws LadesaeulenParseError when fields is not an array", async 
   const { client } = clientFor({ fields: { message: "unexpected shape" } });
   await assert.rejects(
     () => client.fields(),
-    (err) => err instanceof LadesaeulenParseError && /"fields".*array.*\/0/.test(err.message),
+    (err) => err instanceof LadesaeulenParseError && err.message === "Unexpected response shape from /0: expected a fields array.",
   );
 });
 
@@ -269,4 +271,37 @@ test("stations() rejects a reply whose features are missing, not an array, or no
     );
   }
   assert.deepEqual(await clientFor({ features: [] }).client.stations(), { features: [], exceededTransferLimit: false });
+});
+
+test("countBy() rejects null groups, groups without attributes and non-numeric counts", async () => {
+  const cases: [unknown, string][] = [
+    [{ features: [{ attributes: { state: "A", count: 3 } }, { attributes: null }] }, "feature 1 has none."],
+    [{ features: [{}] }, "feature 0 has none."],
+    [{ features: [null] }, "feature 0 is null."],
+    [{ features: [{ attributes: { state: "A" } }] }, "a non-negative integer count in every group, group 0 has none."],
+    [{ features: [{ attributes: { state: "A", count: "3" } }] }, "group 0 has a string."],
+  ];
+  for (const [body, tail] of cases) {
+    const { client } = clientFor(body);
+    await assert.rejects(
+      () => client.countBy("state"),
+      (err) => err instanceof LadesaeulenParseError && err.message.endsWith(tail),
+      JSON.stringify(body),
+    );
+  }
+});
+
+test("fields() rejects null entries and entries without a string name", async () => {
+  for (const [body, tail] of [
+    [{ fields: [null, 1] }, "field 0 is null."],
+    [{ fields: [{ name: "ID" }, { name: 5 }] }, "field 1 has no string name."],
+    [{}, "expected a fields array."],
+  ] as const) {
+    const { client } = clientFor(body);
+    await assert.rejects(
+      () => client.fields(),
+      (err) => err instanceof LadesaeulenParseError && err.message.endsWith(tail),
+      JSON.stringify(body),
+    );
+  }
 });
