@@ -8,6 +8,7 @@ export {
   MAX_GET_URL_LENGTH,
   MAX_RETRY_AFTER_MS,
   parseRetryAfter,
+  describeArcGisError,
 } from "./engine.js";
 export type { EngineOptions, RawResponse, RequestTarget } from "./engine.js";
 export { MAX_TIMEOUT_MS, nodeHttpTransport } from "./http.js";

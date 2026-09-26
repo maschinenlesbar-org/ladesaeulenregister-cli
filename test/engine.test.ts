@@ -224,3 +224,19 @@ test("the engine rejects a base URL with a query or fragment", () => {
     );
   }
 });
+
+test("a non-2xx ArcGIS error with an empty message reports its details", async () => {
+  const mt = makeMockTransport(() =>
+    jsonResponse(
+      { error: { code: 400, message: "", details: ["No where clause specified.", "No where clause specified."] } },
+      400,
+    ),
+  );
+  const e = new RequestEngine({ transport: mt.transport, baseUrl: "https://example.test/fs" });
+  await assert.rejects(
+    () => e.getJson("/0", { f: "json" }),
+    (err) =>
+      err instanceof LadesaeulenApiError &&
+      err.message === "HTTP 400 for GET https://example.test/fs/0?f=json: No where clause specified.",
+  );
+});

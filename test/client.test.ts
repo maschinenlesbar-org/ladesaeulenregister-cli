@@ -313,3 +313,11 @@ test("countByPage() carries the server's exceededTransferLimit", async () => {
   assert.equal(page.groups.length, 3);
   assert.equal((await clientFor(fx.countByState).client.countByPage("state")).exceededTransferLimit, false);
 });
+
+test("an ArcGIS error envelope drops a details entry that repeats the message", async () => {
+  const { client } = clientFor({ error: { code: 400, message: "Invalid URL", details: ["Invalid URL", "", "Try again"] } });
+  await assert.rejects(
+    () => client.fields(),
+    (err) => err instanceof LadesaeulenApiError && err.detail === "Invalid URL; Try again",
+  );
+});
