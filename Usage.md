@@ -31,7 +31,7 @@ ladesaeulen [global options] <command> [command options]
 | `--fields <list>` | comma-separated field list, or `'*'` for all |
 | `--near <lat,lon>` | only stations near this WGS84 point (needs `--radius`) |
 | `--radius <km>` | search radius in km for `--near`: a plain decimal from `0.001` (1 m) to `1000` |
-| `--count` | print only the number of matching stations |
+| `--count` | print only the number of matching stations (all of them: combine it with `--where` and `--near`/`--radius`; with `--limit`, `--offset`, `--order-by`, `--fields` or `--geojson` it is a usage error) |
 | `--geojson` | output a GeoJSON FeatureCollection instead of ArcGIS JSON |
 
 Default output is `{ features, exceededTransferLimit }` — `exceededTransferLimit:
@@ -91,7 +91,7 @@ ladesaeulen fields --compact | jq '.[].name'
 |---|---|
 | `0` | success (help/version included); an empty result also exits 0 |
 | `1` | API/logical error (the ArcGIS `error` envelope), or a catch-all |
-| `2` | usage error (bad flags, unknown command, `--near` without `--radius`, a non-`http(s)` or malformed `--base-url`, redirecting base URL) |
+| `2` | usage error (bad flags, unknown command, `--near` without `--radius`, `--count` with a paging/field option, a non-`http(s)` or malformed `--base-url`, redirecting base URL) |
 | `4` | HTTP 404 |
 | `6` | network / transport failure (DNS, connection, timeout, response size-cap) |
 

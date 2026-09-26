@@ -330,3 +330,24 @@ test("--user-agent: blank, control characters and non-Latin-1 are usage errors; 
   assert.equal(await run(["--user-agent", "Grüße\tbot/1", "stations", "--count"], ok.deps), 0);
   assert.equal(ok.mt.last().headers?.["User-Agent"], "Grüße\tbot/1");
 });
+
+test("--count with --limit/--offset/--order-by/--fields is a usage error, no request", async () => {
+  for (const extra of [["--limit", "10"], ["--offset", "5"], ["--order-by", "Ort ASC"], ["--fields", "ID"]]) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["stations", "--count", ...extra], cli.deps), 2, extra.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), new RegExp(`--count cannot be combined with ${extra[0]}: it counts every match`));
+  }
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--count", "--limit", "10", "--offset", "116000"], cli.deps), 2);
+  assert.match(cli.err.join("\n"), /--count cannot be combined with --limit, --offset:/);
+});
+
+test("--count sends no paging parameters; a plain page still defaults to 50 rows", async () => {
+  const count = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--count"], count.deps), 0);
+  assert.equal(queryOf(count.mt.last()).has("resultRecordCount"), false);
+  const page = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["stations"], page.deps), 0);
+  assert.equal(queryOf(page.mt.last()).get("resultRecordCount"), "50");
+});

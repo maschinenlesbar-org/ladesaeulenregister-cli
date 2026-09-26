@@ -39,11 +39,22 @@ function truncationNote(rows: number, limit: number): string {
   );
 }
 
+/** Rows per `stations` page when `--limit` is not given. */
+const DEFAULT_LIMIT = 50;
+
+/** Options that shape a page of rows and so mean nothing to `--count`. */
+const PAGE_OPTIONS: readonly [key: string, flag: string][] = [
+  ["limit", "--limit"],
+  ["offset", "--offset"],
+  ["orderBy", "--order-by"],
+  ["fields", "--fields"],
+];
+
 /** Build a StationQuery from this command's parsed options. */
 function buildStationQuery(opts: Record<string, unknown>): StationQuery {
   const q: StationQuery = {};
   if (typeof opts["where"] === "string") q.where = opts["where"];
-  if (typeof opts["limit"] === "number") q.limit = opts["limit"];
+  if (opts["count"] !== true) q.limit = typeof opts["limit"] === "number" ? opts["limit"] : DEFAULT_LIMIT;
   if (typeof opts["offset"] === "number") q.offset = opts["offset"];
   if (typeof opts["orderBy"] === "string") q.orderBy = opts["orderBy"];
   if (typeof opts["fields"] === "string") q.outFields = opts["fields"];
@@ -66,9 +77,8 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .option("--where <sql>", "SQL filter, e.g. \"Ort='Berlin' AND Typ='Schnellladeeinrichtung'\"", parseNonEmpty)
     .option(
       "--limit <n>",
-      "max rows per request (1..10000; the server returns at most ~2000 — page with --offset)",
+      "max rows per request (1..10000, default 50; the server returns at most ~2000 — page with --offset)",
       parseBoundedInt(1, 10000),
-      50,
     )
     .option("--offset <n>", "rows to skip (for paging)", parseIntArg)
     .option(
@@ -85,6 +95,15 @@ export function registerCommands(program: Command, deps: CliDeps): void {
       action(deps, async ({ client, global, opts }) => {
         if (opts["count"] === true && opts["geojson"] === true) {
           throw new LadesaeulenValidationError("--count and --geojson cannot be combined.");
+        }
+        if (opts["count"] === true) {
+          const given = PAGE_OPTIONS.filter(([key]) => opts[key] !== undefined).map(([, flag]) => flag);
+          if (given.length > 0) {
+            throw new LadesaeulenValidationError(
+              `--count cannot be combined with ${given.join(", ")}: it counts every match, ` +
+                "so paging, sorting and field options do not apply.",
+            );
+          }
         }
         const q = buildStationQuery(opts);
         if (q.near && isOutsideGermany(q.near.lat, q.near.lon)) {
