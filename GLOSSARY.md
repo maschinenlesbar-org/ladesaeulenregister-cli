@@ -6,7 +6,7 @@ data are German (with umlauts); keep them verbatim in `--where`.
 | Term | In the CLI | What it is |
 |---|---|---|
 | **Ladesäulenregister** | — | The Bundesnetzagentur's register of publicly accessible EV charging stations in Germany. |
-| **Ladeeinrichtung** (station) | a feature / row | One charging station. `Typ` is `Normalladeeinrichtung` (AC) or `Schnellladeeinrichtung` (DC fast). |
+| **Ladeeinrichtung** (station) | a feature / row | One charging station. `Typ` is `Normalladeeinrichtung` or `Schnellladeeinrichtung` — by power, not by current type (see below). |
 | **Ladepunkt** (charge point) | `Anzahl_Ladepunkte` | A single connector/socket. A station has one or more; the register counts *stations*, not charge points. `Anzahl_Ladepunkte` is a text column (`"2"`). |
 | **Betreiber / operator** | `Betreiber`, `operator_companyName` | The charge-point operator. `operator_companyName` is the company name and is filled on every station; `Betreiber` is a short display name that is `null` on more than half of the stations, so filter and group on `operator_companyName`. |
 | **`state`** | filter / `count-by` | Bundesland, e.g. `Bayern`. |
@@ -28,7 +28,11 @@ data are German (with umlauts); keep them verbatim in `--where`.
   text column: `max_electric_power_station >= 150` fails with an ArcGIS error 400, so write
   `CAST(max_electric_power_station AS FLOAT) >= 150` (and cast in `--order-by`, which
   otherwise sorts as text).
-- **`Typ`** distinguishes normal (AC) from fast (DC) charging.
+- **`Typ` is about power, not AC versus DC.** It follows the Ladesäulenverordnung: a
+  `Schnellladeeinrichtung` has a charge point with more than 22 kW. Most of them are DC,
+  but not all — 48 fast stations had no DC connector on 2026-09-26 (e.g. AC Typ 2 at
+  25 kW). For "DC chargers", filter on the connector columns, e.g.
+  `Steckersystem_Ladepunkt1 LIKE '%DC%'`.
 - **`go_live_date` is `dd.mm.yyyy` text**, so `--order-by "go_live_date DESC"` returns
   `31.12.2025` first although stations went live in 2026. Filter by year or month with
   `LIKE '%.2026'` / `LIKE '%.08.2026'` instead of sorting.

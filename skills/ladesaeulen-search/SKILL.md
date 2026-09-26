@@ -39,7 +39,8 @@ Run `ladesaeulen fields` for the full list. The useful ones:
 | `state` | Bundesland — `state='Bayern'` |
 | `operator_companyName` | operator company name, filled on every station — `operator_companyName LIKE '%EnBW%'` |
 | `Betreiber` | short operator name, **`null` on more than half of all stations** — don't filter or group on it |
-| `Typ` | `'Normalladeeinrichtung'` or `'Schnellladeeinrichtung'` |
+| `Typ` | `'Normalladeeinrichtung'` or `'Schnellladeeinrichtung'` (more than 22 kW — not the same as DC) |
+| `Steckersystem_Ladepunkt1..10` | connector per charge point — `Steckersystem_Ladepunkt1 LIKE '%DC%'` for DC |
 | `Status` | `'In Betrieb'`, … |
 | `max_electric_power_station` | station power in kW, **stored as text** (`"150"`, `"3.7"`) — `CAST(max_electric_power_station AS FLOAT) >= 150` |
 | `Anzahl_Ladepunkte` | number of charge points, also text (`"2"`) — `CAST(Anzahl_Ladepunkte AS INTEGER) > 2` |
@@ -79,6 +80,11 @@ ladesaeulen stations --count
   `CAST(max_electric_power_station AS FLOAT)` in `--where` **and** `--order-by`: a plain
   `--order-by "max_electric_power_station DESC"` sorts as text (`"99"` above `"400"`).
   Check a column's `type` in `ladesaeulen fields` before comparing it with a number.
+- **"Fast" is not "DC".** `Typ='Schnellladeeinrichtung'` means a charge point above
+  22 kW (the Ladesäulenverordnung's definition); 48 fast stations had only AC connectors
+  on 2026-09-26. When the user asks for DC chargers, filter on the connector columns
+  (`Steckersystem_Ladepunkt1 LIKE '%DC%'`, and the other `Steckersystem_Ladepunkt*`
+  columns for multi-point stations) and say which definition you used.
 - **Don't sort by `go_live_date` for "newest stations".** It is `dd.mm.yyyy` text, so
   `--order-by "go_live_date DESC"` puts `31.12.2025` first although 9,697 stations went
   live in 2026 (on 2026-09-26). Filter by year or month instead

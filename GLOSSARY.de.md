@@ -6,7 +6,7 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 | Begriff | In der CLI | Was es ist |
 |---|---|---|
 | **Ladesäulenregister** | – | Das Register der Bundesnetzagentur für öffentlich zugängliche Ladeeinrichtungen für E-Autos in Deutschland. |
-| **Ladeeinrichtung** | ein Feature / eine Zeile | Eine einzelne Ladestation. `Typ` ist `Normalladeeinrichtung` (AC) oder `Schnellladeeinrichtung` (DC-Schnellladen). |
+| **Ladeeinrichtung** | ein Feature / eine Zeile | Eine einzelne Ladestation. `Typ` ist `Normalladeeinrichtung` oder `Schnellladeeinrichtung` – nach Leistung, nicht nach Stromart (siehe unten). |
 | **Ladepunkt** | `Anzahl_Ladepunkte` | Ein einzelner Anschluss bzw. eine einzelne Steckdose. Eine Ladeeinrichtung hat einen oder mehrere; das Register zählt *Ladeeinrichtungen*, nicht Ladepunkte. `Anzahl_Ladepunkte` ist eine Textspalte (`"2"`). |
 | **Betreiber / operator** | `Betreiber`, `operator_companyName` | Der Betreiber der Ladepunkte. `operator_companyName` ist der Firmenname und bei jeder Ladeeinrichtung gefüllt; `Betreiber` ist ein kurzer Anzeigename, der bei mehr als der Hälfte der Ladeeinrichtungen `null` ist. Filtern und gruppieren Sie daher nach `operator_companyName`. |
 | **`state`** | Filter / `count-by` | Bundesland, z. B. `Bayern`. |
@@ -28,7 +28,11 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
   Es ist eine Textspalte: `max_electric_power_station >= 150` scheitert mit einem ArcGIS-Fehler 400,
   schreiben Sie daher `CAST(max_electric_power_station AS FLOAT) >= 150` (und casten Sie auch in
   `--order-by`, das sonst als Text sortiert).
-- **`Typ`** unterscheidet Normalladen (AC) von Schnellladen (DC).
+- **`Typ` richtet sich nach der Leistung, nicht nach AC oder DC.** Er folgt der
+  Ladesäulenverordnung: Eine `Schnellladeeinrichtung` hat einen Ladepunkt mit mehr als 22 kW.
+  Die meisten davon laden mit Gleichstrom, aber nicht alle – 48 Schnellladeeinrichtungen hatten am
+  26.09.2026 keinen DC-Anschluss (z. B. AC Typ 2 mit 25 kW). Für „DC-Lader“ filtern Sie nach den
+  Steckerspalten, z. B. `Steckersystem_Ladepunkt1 LIKE '%DC%'`.
 - **`go_live_date` ist Text im Format `tt.mm.jjjj`**, daher liefert `--order-by "go_live_date DESC"`
   zuerst `31.12.2025`, obwohl 2026 Ladeeinrichtungen in Betrieb gingen. Filtern Sie nach Jahr oder
   Monat mit `LIKE '%.2026'` / `LIKE '%.08.2026'`, statt zu sortieren.
