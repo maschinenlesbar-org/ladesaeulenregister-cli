@@ -43,6 +43,7 @@ Run `ladesaeulen fields` for the full list. The useful ones:
 | `Status` | `'In Betrieb'`, … |
 | `max_electric_power_station` | station power in kW, **stored as text** (`"150"`, `"3.7"`) — `CAST(max_electric_power_station AS FLOAT) >= 150` |
 | `Anzahl_Ladepunkte` | number of charge points, also text (`"2"`) — `CAST(Anzahl_Ladepunkte AS INTEGER) > 2` |
+| `go_live_date` | date it went live, **`dd.mm.yyyy` text** (`"31.08.2026"`) — `go_live_date LIKE '%.2026'` |
 
 ## Recipes
 
@@ -78,6 +79,10 @@ ladesaeulen stations --count
   `CAST(max_electric_power_station AS FLOAT)` in `--where` **and** `--order-by`: a plain
   `--order-by "max_electric_power_station DESC"` sorts as text (`"99"` above `"400"`).
   Check a column's `type` in `ladesaeulen fields` before comparing it with a number.
+- **Don't sort by `go_live_date` for "newest stations".** It is `dd.mm.yyyy` text, so
+  `--order-by "go_live_date DESC"` puts `31.12.2025` first although 9,697 stations went
+  live in 2026 (on 2026-09-26). Filter by year or month instead
+  (`--where "go_live_date LIKE '%.2026'" --count`, `LIKE '%.08.2026'`).
 - **Filter operators on `operator_companyName`, not `Betreiber`.** `Betreiber` is `null`
   on 64,635 of 116,343 stations (2026-09-15), so `state='Bayern' AND Betreiber LIKE
   '%EnBW%'` counted 42 stations where `operator_companyName LIKE '%EnBW%'` counted 825.

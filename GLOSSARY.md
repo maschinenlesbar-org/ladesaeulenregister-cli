@@ -13,6 +13,7 @@ data are German (with umlauts); keep them verbatim in `--where`.
 | **`Ort` / `Postleitzahl` / `Straße` / `Hausnummer`** | fields | City / postcode / street / house number. |
 | **`Status`** | field | Operating status, e.g. `In Betrieb`. |
 | **`max_electric_power_station`** | field | Max electric power of the station, in **kW**, stored as text (`"150"`, `"3.7"`; the column is `esriFieldTypeString`). Compare and sort it with `CAST(max_electric_power_station AS FLOAT)`. |
+| **`go_live_date`** | field | Date the station went into operation, stored as **`dd.mm.yyyy` text** (`"31.08.2026"`; `esriFieldTypeString`). Sorting on it sorts the text, day first, so it does not give the newest stations; filter by year or month with `LIKE` (`go_live_date LIKE '%.2026'`, `go_live_date LIKE '%.08.2026'`). |
 | **`Steckersystem_Ladepunkt1..10`** | fields | Connector system per charge point (Typ 2, CCS/Combo, CHAdeMO, Schuko, …). |
 | **`coordinates_latitude` / `coordinates_longitude`** | fields | WGS84 position (also the feature geometry). |
 | **FeatureServer / layer** | `--base-url` | The ArcGIS service; charging stations are layer `0`. |
@@ -28,6 +29,9 @@ data are German (with umlauts); keep them verbatim in `--where`.
   `CAST(max_electric_power_station AS FLOAT) >= 150` (and cast in `--order-by`, which
   otherwise sorts as text).
 - **`Typ`** distinguishes normal (AC) from fast (DC) charging.
+- **`go_live_date` is `dd.mm.yyyy` text**, so `--order-by "go_live_date DESC"` returns
+  `31.12.2025` first although stations went live in 2026. Filter by year or month with
+  `LIKE '%.2026'` / `LIKE '%.08.2026'` instead of sorting.
 - **It counts stations, not charge points** — a station may host several
   `Anzahl_Ladepunkte`; be explicit about which the user asked for.
 - **The register is a snapshot** refreshed regularly (roughly daily); counts drift.

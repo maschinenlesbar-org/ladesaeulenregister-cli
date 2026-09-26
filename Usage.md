@@ -66,6 +66,9 @@ Standard Esri SQL over the layer's columns:
   in `fields`); cast them to compare as numbers:
   `CAST(max_electric_power_station AS FLOAT) >= 150`, `CAST(Anzahl_Ladepunkte AS INTEGER) > 2`.
   An unquoted `max_electric_power_station >= 150` fails with ArcGIS error 400
+- `go_live_date` is `dd.mm.yyyy` **text** too, so sorting on it does not find the newest
+  stations (`"31.12.2025"` sorts above `"31.08.2026"`); filter by year or month with
+  `go_live_date LIKE '%.2026'` or `LIKE '%.08.2026'`
 - combine with `AND`/`OR`; the default is `1=1` (all rows)
 - long filters are fine: when the request URL would pass 2,000 characters (a long
   `IN (…)` list), the CLI sends the query as a form-encoded POST instead of a GET, and an

@@ -13,6 +13,7 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 | **`Ort` / `Postleitzahl` / `Straße` / `Hausnummer`** | Felder | Anschrift: Ort, Postleitzahl, Straße und Hausnummer. |
 | **`Status`** | Feld | Betriebsstatus, z. B. `In Betrieb`. |
 | **`max_electric_power_station`** | Feld | Maximale elektrische Leistung der Ladeeinrichtung, in **kW**, als Text gespeichert (`"150"`, `"3.7"`; die Spalte ist `esriFieldTypeString`). Vergleichen und sortieren Sie mit `CAST(max_electric_power_station AS FLOAT)`. |
+| **`go_live_date`** | Feld | Datum der Inbetriebnahme, gespeichert als **Text im Format `tt.mm.jjjj`** (`"31.08.2026"`; `esriFieldTypeString`). Eine Sortierung danach sortiert den Text, beginnend mit dem Tag, und liefert daher nicht die neuesten Ladeeinrichtungen; filtern Sie nach Jahr oder Monat mit `LIKE` (`go_live_date LIKE '%.2026'`, `go_live_date LIKE '%.08.2026'`). |
 | **`Steckersystem_Ladepunkt1..10`** | Felder | Steckersystem je Ladepunkt (Typ 2, CCS/Combo, CHAdeMO, Schuko, …). |
 | **`coordinates_latitude` / `coordinates_longitude`** | Felder | Position in WGS84 (zugleich die Geometrie des Features). |
 | **FeatureServer / Layer** | `--base-url` | Der ArcGIS-Dienst; die Ladeeinrichtungen liegen in Layer `0`. |
@@ -28,6 +29,9 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
   schreiben Sie daher `CAST(max_electric_power_station AS FLOAT) >= 150` (und casten Sie auch in
   `--order-by`, das sonst als Text sortiert).
 - **`Typ`** unterscheidet Normalladen (AC) von Schnellladen (DC).
+- **`go_live_date` ist Text im Format `tt.mm.jjjj`**, daher liefert `--order-by "go_live_date DESC"`
+  zuerst `31.12.2025`, obwohl 2026 Ladeeinrichtungen in Betrieb gingen. Filtern Sie nach Jahr oder
+  Monat mit `LIKE '%.2026'` / `LIKE '%.08.2026'`, statt zu sortieren.
 - **Gezählt werden Ladeeinrichtungen, nicht Ladepunkte** – eine Ladeeinrichtung kann mehrere
   Ladepunkte haben (`Anzahl_Ladepunkte`); machen Sie deutlich, welche Zahl gefragt ist.
 - **Das Register ist eine Momentaufnahme**, die regelmäßig (etwa täglich) aktualisiert wird;
