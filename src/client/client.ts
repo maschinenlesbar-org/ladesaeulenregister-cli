@@ -59,7 +59,7 @@ export class LadesaeulenClient {
     this.engine = new RequestEngine(options);
   }
 
-  /** GET a query path, then throw if the ArcGIS `error` envelope is present. */
+  /** Request a query path, then throw if the ArcGIS `error` envelope is present. */
   private async get<T extends { error?: { code?: number; message?: string; details?: string[] } }>(
     path: string,
     params: QueryParams,
@@ -84,9 +84,10 @@ export class LadesaeulenClient {
         .filter((s): s is string => typeof s === "string" && s.length > 0)
         .map(sanitizeServerText)
         .join("; ");
+      const target = this.engine.requestTarget(path, params);
       throw new LadesaeulenApiError({
-        url: this.engine.buildUrl(path, params),
-        method: "GET",
+        url: target.url,
+        method: target.method,
         body: JSON.stringify(res),
         arcgisCode: typeof err.code === "number" ? err.code : undefined,
         detail: detail || undefined,

@@ -62,6 +62,9 @@ Standard Esri SQL over the layer's columns:
   `CAST(max_electric_power_station AS FLOAT) >= 150`, `CAST(Anzahl_Ladepunkte AS INTEGER) > 2`.
   An unquoted `max_electric_power_station >= 150` fails with ArcGIS error 400
 - combine with `AND`/`OR`; the default is `1=1` (all rows)
+- long filters are fine: when the request URL would pass 2,000 characters (a long
+  `IN (…)` list), the CLI sends the query as a form-encoded POST instead of a GET, and an
+  error message then reads `… for POST <url>`
 
 Common fields: `Ort`, `Postleitzahl`, `state`, `Betreiber`, `operator_companyName`,
 `Typ` (`Normalladeeinrichtung`/`Schnellladeeinrichtung`), `Status`,

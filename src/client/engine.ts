@@ -1,7 +1,8 @@
-// The request engine: turns logical (path, query) calls into HTTP GET requests via
-// a Transport, applies retry/backoff for transient statuses (429, 503), and decodes
+// The request engine: turns logical (path, query) calls into HTTP requests via a
+// Transport, applies retry/backoff for transient statuses (429, 503), and decodes
 // JSON responses. The Ladesäulenregister is a public ArcGIS FeatureServer — an
-// unauthenticated GET API whose parameters travel in the query string.
+// unauthenticated API whose parameters travel in the query string, or, for a query
+// too long for a URL, in a form-encoded POST body (ArcGIS `/query` accepts both).
 
 import { nodeHttpTransport, type Transport } from "./http.js";
 import { buildQueryString, type QueryParams } from "./query.js";
@@ -45,6 +46,24 @@ export interface EngineOptions {
 }
 
 const DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
+
+/**
+ * Longest URL the engine sends as a GET. A longer request (a `where` with a long
+ * `IN (…)` list) goes out as a form-encoded POST to the same path instead: the
+ * ArcGIS Online front end answers a GET URL of about 2.9 KB with a misleading
+ * HTTP 404 and one above about 20 KB with 414, while `/query` takes the same
+ * parameters as a POST body (live-checked 2026-09-26). 2,000 characters stays
+ * well below the point where the GET starts to fail.
+ */
+export const MAX_GET_URL_LENGTH = 2000;
+
+/** How the engine sends one logical request: method, URL and (for a POST) the form body. */
+export interface RequestTarget {
+  method: "GET" | "POST";
+  url: string;
+  /** The form-encoded parameters of a POST (`application/x-www-form-urlencoded`). */
+  body?: string;
+}
 
 /**
  * Strip control characters out of a string that originates in an
@@ -129,24 +148,41 @@ export class RequestEngine {
   }
 
   /**
-   * Perform a GET with Accept negotiation and transient-error retries. Redirects
-   * are NOT followed — the canonical host answers directly, so a 3xx surfaces as
-   * an error.
+   * Decide how a request goes out: a GET with the parameters in the query string,
+   * or — when that URL would be longer than `MAX_GET_URL_LENGTH` — a POST to the
+   * bare path with the same parameters as a form-encoded body.
+   */
+  requestTarget(path: string, query?: QueryParams): RequestTarget {
+    const url = this.buildUrl(path, query);
+    const qs = query ? buildQueryString(query) : "";
+    if (qs === "" || url.length <= MAX_GET_URL_LENGTH) return { method: "GET", url };
+    return { method: "POST", url: this.buildUrl(path), body: qs };
+  }
+
+  /**
+   * Perform a request (GET, or a form POST for a long query — see `requestTarget`)
+   * with Accept negotiation and transient-error retries. Redirects are NOT
+   * followed — the canonical host answers directly, so a 3xx surfaces as an error.
    */
   async request(path: string, query?: QueryParams, accept = "application/json"): Promise<RawResponse> {
-    const url = this.buildUrl(path, query);
+    const { method, url, body } = this.requestTarget(path, query);
     const headers: Record<string, string> = {
       ...this.defaultHeaders,
       Accept: accept,
       "User-Agent": this.userAgent,
     };
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/x-www-form-urlencoded";
+      headers["Content-Length"] = String(Buffer.byteLength(body));
+    }
 
     let attempt = 0;
     for (;;) {
       const response = await this.transport({
-        method: "GET",
+        method,
         url,
         headers,
+        ...(body !== undefined ? { body } : {}),
         timeoutMs: this.timeoutMs,
         ...(this.maxResponseBytes > 0 ? { maxResponseBytes: this.maxResponseBytes } : {}),
       });
@@ -161,14 +197,14 @@ export class RequestEngine {
 
       const contentType = String(response.headers["content-type"] ?? "");
       if (status < 200 || status >= 300) {
-        throw this.toApiError(url, status, response.body);
+        throw this.toApiError(method, url, status, response.body);
       }
 
       return { data: response.body, contentType, status };
     }
   }
 
-  /** GET a path with query params and parse the JSON reply into `T`. */
+  /** Request a path with query params and parse the JSON reply into `T`. */
   async getJson<T>(path: string, query?: QueryParams): Promise<T> {
     const res = await this.request(path, query);
     const text = res.data.toString("utf8");
@@ -182,7 +218,7 @@ export class RequestEngine {
     }
   }
 
-  private toApiError(url: string, status: number, body: Buffer): LadesaeulenApiError {
+  private toApiError(method: string, url: string, status: number, body: Buffer): LadesaeulenApiError {
     const text = body.toString("utf8");
     let detail: string | undefined;
     try {
@@ -206,6 +242,6 @@ export class RequestEngine {
     // characters so a hostile endpoint cannot drive terminal escape sequences
     // into stderr via the error message.
     if (detail !== undefined) detail = sanitizeServerText(detail);
-    return new LadesaeulenApiError({ status, url, method: "GET", body: text, detail });
+    return new LadesaeulenApiError({ status, url, method, body: text, detail });
   }
 }

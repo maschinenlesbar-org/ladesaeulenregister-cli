@@ -158,3 +158,14 @@ test("the client rejects a non-http(s) base URL before any request, even with a 
     assert.equal(mt.calls.length, 0);
   }
 });
+
+test("an ArcGIS error envelope on a POSTed (long) query names POST and the bare URL", async () => {
+  const { client } = clientFor({ error: { code: 400, message: "bad where" } });
+  await assert.rejects(
+    () => client.count({ where: `Ort IN (${"'X',".repeat(700)}'Y')` }),
+    (err) =>
+      err instanceof LadesaeulenApiError &&
+      err.method === "POST" &&
+      /^ArcGIS error 400 for POST https:\/\/\S+\/0\/query: bad where$/.test(err.message),
+  );
+});

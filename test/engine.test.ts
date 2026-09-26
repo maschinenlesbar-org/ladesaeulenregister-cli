@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RequestEngine } from "../src/client/engine.js";
+import { RequestEngine, MAX_GET_URL_LENGTH } from "../src/client/engine.js";
 import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
@@ -127,4 +127,40 @@ test("the engine rejects a non-http(s) base URL before any request, even with a 
 
 test("the engine rejects an unparseable base URL", () => {
   assert.throws(() => new RequestEngine({ baseUrl: "not a url" }), LadesaeulenNetworkError);
+});
+
+test("a query whose GET URL would exceed MAX_GET_URL_LENGTH goes out as a form POST", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ count: 4956 }));
+  const e = new RequestEngine({ transport: mt.transport, baseUrl: "https://example.test/FS" });
+  const where = `Ort IN ('Berlin'${Array.from({ length: 200 }, (_, i) => `,'X${String(i).padStart(4, "0")}'`).join("")})`;
+  assert.ok(e.buildUrl("/0/query", { where, f: "json" }).length > MAX_GET_URL_LENGTH);
+  assert.deepEqual(await e.getJson("/0/query", { where, f: "json", returnCountOnly: true }), { count: 4956 });
+  const req = mt.last();
+  assert.equal(req.method, "POST");
+  assert.equal(req.url, "https://example.test/FS/0/query");
+  assert.equal(req.headers?.["Content-Type"], "application/x-www-form-urlencoded");
+  const body = String(req.body);
+  assert.equal(req.headers?.["Content-Length"], String(Buffer.byteLength(body)));
+  const form = new URLSearchParams(body);
+  assert.equal(form.get("where"), where);
+  assert.equal(form.get("f"), "json");
+  assert.equal(form.get("returnCountOnly"), "true");
+});
+
+test("a short query stays a GET without a body", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ count: 1 }));
+  const e = new RequestEngine({ transport: mt.transport });
+  await e.getJson("/0/query", { where: "Ort='Berlin'", f: "json" });
+  assert.equal(mt.last().method, "GET");
+  assert.equal(mt.last().body, undefined);
+  assert.equal(mt.last().headers?.["Content-Type"], undefined);
+});
+
+test("an HTTP error on a POSTed query names POST and the bare URL", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ error: { message: "nope" } }, 400));
+  const e = new RequestEngine({ transport: mt.transport, baseUrl: "https://example.test/FS" });
+  await assert.rejects(
+    () => e.getJson("/0/query", { where: "x".repeat(3000) }),
+    (err) => err instanceof LadesaeulenApiError && err.message === "HTTP 400 for POST https://example.test/FS/0/query: nope",
+  );
 });

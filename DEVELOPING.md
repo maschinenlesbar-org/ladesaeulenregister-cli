@@ -28,7 +28,7 @@ src/
     types.ts     # Feature / ArcGIS query envelope / ChargingStation / query types
     query.ts     # dependency-free query-string builder
     http.ts      # Transport interface + default node:http/https transport
-    engine.ts    # URL building, GET, retry/backoff, JSON decode, HTTP-error mapping
+    engine.ts    # URL building, GET (POST for long queries), retry/backoff, JSON decode, HTTP-error mapping
     errors.ts    # LadesaeulenError / …ApiError / …NetworkError / …ValidationError / …ParseError
     client.ts    # LadesaeulenClient (stations / count / geojson / countBy / fields)
     index.ts
@@ -65,6 +65,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `resultOffset` (paging), `orderByFields`, `f` (`json`|`geojson`), `returnCountOnly`,
   `outStatistics`+`groupByFieldsForStatistics` (used by `countBy`), and geometry
   params (`geometry`/`geometryType`/`inSR`/`distance`/`units`/`spatialRel`) for `--near`.
+- **Long queries go as a POST.** ArcGIS Online answers a GET URL of about 2.9 KB with a
+  misleading HTTP 404 (and above about 20 KB with 414). `/query` takes the same parameters
+  as an `application/x-www-form-urlencoded` POST body, so the engine switches to a POST to
+  the bare path once the GET URL would pass `MAX_GET_URL_LENGTH` (2,000 characters;
+  `requestTarget()` decides, and error messages name the method actually used).
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).
