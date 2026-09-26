@@ -84,6 +84,11 @@ function groupValue(attributes: Record<string, unknown>, field: string, path: st
   );
 }
 
+/** The error for a reply whose top-level shape is not what the client relies on. */
+function shapeError(path: string, expected: string): LadesaeulenParseError {
+  return new LadesaeulenParseError(`Unexpected response shape from ${path}: expected ${expected}.`);
+}
+
 /** Options for the client (engine options only — the API needs no auth). */
 export type LadesaeulenClientOptions = EngineOptions;
 
@@ -164,7 +169,13 @@ export class LadesaeulenClient {
     const params = this.buildParams(q, { f: "json", returnCountOnly: true });
     delete params["outFields"];
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
-    return res.count ?? 0;
+    // 0 is a plausible real answer, so a reply without a usable count must not
+    // become one (a proxy's `{}`, a non-ArcGIS endpoint, a string count).
+    const count: unknown = res.count;
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+      throw shapeError(`${LAYER}/query`, "a non-negative integer count");
+    }
+    return count;
   }
 
   /** The matching stations as a GeoJSON FeatureCollection (`f=geojson`). */

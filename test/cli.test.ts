@@ -223,3 +223,10 @@ test("count-by with a field list is a usage error (exit 2), no request", async (
   assert.equal(cli.mt.calls.length, 0);
   assert.match(cli.err.join("\n"), /expected one field name, got a list/);
 });
+
+test("--count with a non-numeric count exits 1 instead of printing it", async () => {
+  const cli = makeCli(() => jsonResponse({ count: "12abc" }));
+  assert.equal(await run(["stations", "--count"], cli.deps), 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(cli.err.join("\n"), /expected a non-negative integer count/);
+});

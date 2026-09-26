@@ -204,3 +204,17 @@ test("countBy() reads a group value echoed in another case, and rejects a group 
   const nullGroup = clientFor({ features: [{ attributes: { Betreiber: null, count: 5 } }] });
   assert.deepEqual(await nullGroup.client.countBy("Betreiber"), [{ value: null, count: 5 }]);
 });
+
+test("count() rejects a reply without a non-negative integer count", async () => {
+  for (const body of [{}, { count: null }, { count: "12abc" }, { count: -1 }, { count: 1.5 }, { features: "x" }]) {
+    const { client } = clientFor(body);
+    await assert.rejects(
+      () => client.count(),
+      (err) =>
+        err instanceof LadesaeulenParseError &&
+        err.message === "Unexpected response shape from /0/query: expected a non-negative integer count.",
+      JSON.stringify(body),
+    );
+  }
+  assert.equal(await clientFor({ count: 0 }).client.count(), 0);
+});
