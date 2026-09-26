@@ -312,3 +312,21 @@ test("--radius must be a plain decimal from 0.001 to 1000 km (usage error, no re
     assert.equal(queryOf(cli.mt.last()).get("distance"), metres);
   }
 });
+
+test("--user-agent: blank, control characters and non-Latin-1 are usage errors; tab and Latin-1 pass", async () => {
+  for (const [ua, msg] of [
+    ["", /Expected a non-empty value/],
+    ["  ", /Expected a non-empty value/],
+    ["€uro", /outside Latin-1 \(above U\+00FF\)/],
+    ["a b", /outside Latin-1/],
+    ["a\r\nX-Evil: 1", /control characters/],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["--user-agent", ua, "stations", "--count"], cli.deps), 2, JSON.stringify(ua));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), msg);
+  }
+  const ok = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["--user-agent", "Grüße\tbot/1", "stations", "--count"], ok.deps), 0);
+  assert.equal(ok.mt.last().headers?.["User-Agent"], "Grüße\tbot/1");
+});
