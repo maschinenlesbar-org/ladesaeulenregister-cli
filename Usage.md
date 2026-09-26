@@ -38,6 +38,8 @@ Default output is `{ features, exceededTransferLimit }` — `exceededTransferLim
 true` means more matched than were returned (the server caps a page at ~2000 rows).
 The CLI prints a stderr note in that case, saying whether your `--limit` or the server's
 cap cut the page; page with `--offset`, raise `--limit` or narrow `--where`.
+`--geojson` gets the same note: there the server puts the flag in the FeatureCollection's
+`properties.exceededTransferLimit`.
 
 ### `count-by <field>` — grouped counts
 
@@ -46,8 +48,8 @@ cap cut the page; page with `--offset`, raise `--limit` or narrow `--where`.
 (`state,Typ`) is a usage error — group by one field and fix the other with `--where`
 (`count-by state --where "Typ='Schnellladeeinrichtung'"`). Good fields: `state`, `Typ`, `operator_companyName`, `Ort`
 (`Betreiber` is `null` on more than half of the stations). The result stops at 2,000
-groups (the server's page limit, no note is printed); the top groups are still correct
-because the server sorts by count first.
+groups (the server's page limit; the CLI then prints a stderr note); the top groups are
+still correct because the server sorts by count first.
 
 ### `fields` — list queryable columns
 

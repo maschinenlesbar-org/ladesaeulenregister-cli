@@ -75,7 +75,7 @@ echo "fast: $fast / total: $total"
   `EnBW Ostwürttemberg DonauRies AG`); say so when you rank.
 - **High-cardinality groups are long and capped** — `count-by Ort` and
   `count-by operator_companyName` stop at **2,000 groups** (the server's page limit;
-  the CLI prints no note). The top of the list is still right, because the server sorts
+  the CLI then prints `Note: more groups exist …` on stderr). The top of the list is still right, because the server sorts
   by count before cutting, so slice with `jq '.[:N]'`; but don't report the length as
   "the number of cities/operators". Narrow with `--where` if you need every group.
 - **It counts stations (Ladeeinrichtungen), not charge points** — a station can have

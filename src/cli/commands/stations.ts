@@ -96,7 +96,14 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         if (opts["count"] === true) {
           renderJson(deps, global, await client.count(q));
         } else if (opts["geojson"] === true) {
-          renderJson(deps, global, await client.geojson(q));
+          const collection = await client.geojson(q);
+          // ArcGIS puts the flag on the FeatureCollection's `properties`.
+          const c = collection as { properties?: { exceededTransferLimit?: unknown }; features?: unknown };
+          if (c.properties?.exceededTransferLimit === true) {
+            const rows = Array.isArray(c.features) ? c.features.length : 0;
+            deps.io.err(truncationNote(rows, q.limit ?? Number.POSITIVE_INFINITY));
+          }
+          renderJson(deps, global, collection);
         } else {
           const page = await client.stations(q);
           if (page.exceededTransferLimit) {
@@ -115,7 +122,14 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .action(
       action(deps, async ({ client, global, opts }, [field]) => {
         const where = typeof opts["where"] === "string" ? opts["where"] : "1=1";
-        renderJson(deps, global, await client.countBy(field!, where));
+        const page = await client.countByPage(field!, where);
+        if (page.exceededTransferLimit) {
+          deps.io.err(
+            `Note: more groups exist than the ${page.groups.length} returned (the server caps a result at ~2000 ` +
+              "groups). The largest groups are all there; narrow --where to see the rest.",
+          );
+        }
+        renderJson(deps, global, page.groups);
       }),
     );
 

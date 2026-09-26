@@ -96,6 +96,17 @@ export interface CountByRow {
   count: number;
 }
 
+/** All groups `countByPage` got back, and whether the server cut the list. */
+export interface CountByPage {
+  /** The groups, sorted descending by count. */
+  groups: CountByRow[];
+  /**
+   * True when more groups exist than were returned (the server caps a result at
+   * ~2000 groups). The groups returned are still the largest ones.
+   */
+  exceededTransferLimit: boolean;
+}
+
 /** Query options for a station search. */
 export interface StationQuery {
   /** SQL `where` filter (default `1=1`). */

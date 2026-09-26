@@ -259,3 +259,25 @@ test("the truncation note blames --limit when the page is as long as the limit",
     "Note: more stations match than the 2 returned (--limit 2). Page with --offset, or raise --limit.",
   );
 });
+
+test("--geojson prints the truncation note when the collection was cut", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ type: "FeatureCollection", properties: { exceededTransferLimit: true }, features: [{}, {}] }),
+  );
+  assert.equal(await run(["stations", "--geojson", "--limit", "3000"], cli.deps), 0);
+  assert.match(cli.err.join("\n"), /the server caps a page at ~2000 rows/);
+  const quiet = makeCli(() => jsonResponse(fx.geojson));
+  assert.equal(await run(["stations", "--geojson"], quiet.deps), 0);
+  assert.deepEqual(quiet.err, []);
+});
+
+test("count-by prints a note when the server cut the group list", async () => {
+  const cli = makeCli(() => jsonResponse({ ...fx.countByState, exceededTransferLimit: true }));
+  assert.equal(await run(["count-by", "state"], cli.deps), 0);
+  assert.equal(
+    cli.err.join("\n"),
+    "Note: more groups exist than the 3 returned (the server caps a result at ~2000 groups). " +
+      "The largest groups are all there; narrow --where to see the rest.",
+  );
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
+});

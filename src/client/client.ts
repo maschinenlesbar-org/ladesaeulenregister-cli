@@ -15,6 +15,7 @@ import { LadesaeulenApiError, LadesaeulenParseError, LadesaeulenValidationError 
 import type { QueryParams } from "./query.js";
 import type {
   ArcGisQueryResponse,
+  CountByPage,
   CountByRow,
   Feature,
   FieldInfo,
@@ -234,6 +235,15 @@ export class LadesaeulenClient {
    * `LadesaeulenValidationError`.
    */
   async countBy(field: string, where = "1=1"): Promise<CountByRow[]> {
+    return (await this.countByPage(field, where)).groups;
+  }
+
+  /**
+   * Like `countBy`, plus the server's `exceededTransferLimit`: `true` when the
+   * list was cut at the server's ~2000-group cap (the largest groups are still
+   * all there, since the server sorts by count first).
+   */
+  async countByPage(field: string, where = "1=1"): Promise<CountByPage> {
     const name = groupField(field);
     const params: QueryParams = {
       where,
@@ -246,13 +256,14 @@ export class LadesaeulenClient {
     };
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
     const path = `${LAYER}/query`;
-    return featureList(res.features, path).map((f, i) => {
+    const groups = featureList(res.features, path).map((f, i) => {
       const count: unknown = f.attributes["count"];
       if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
         throw shapeError(path, `a non-negative integer count in every group, group ${i} has ${kindOf(count)}`);
       }
       return { value: (groupValue(f.attributes, name, path, i) as string | number | null) ?? null, count };
     });
+    return { groups, exceededTransferLimit: res.exceededTransferLimit === true };
   }
 
   /** The layer's field metadata (names/types/aliases) — for building queries. */

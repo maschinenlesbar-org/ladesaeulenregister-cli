@@ -305,3 +305,11 @@ test("fields() rejects null entries and entries without a string name", async ()
     );
   }
 });
+
+test("countByPage() carries the server's exceededTransferLimit", async () => {
+  const { client } = clientFor({ ...fx.countByState, exceededTransferLimit: true });
+  const page = await client.countByPage("state");
+  assert.equal(page.exceededTransferLimit, true);
+  assert.equal(page.groups.length, 3);
+  assert.equal((await clientFor(fx.countByState).client.countByPage("state")).exceededTransferLimit, false);
+});

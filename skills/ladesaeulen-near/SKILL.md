@@ -58,7 +58,9 @@ ladesaeulen stations --near 52.52,13.405 --radius 2 --geojson --limit 200 > near
   `--count` first to gauge how many are nearby before listing.
 - **Raise `--limit`** if you need all nearby stations (default is small); a `true`
   `exceededTransferLimit` means there are more.
-- **`--geojson`** is ideal when the answer feeds a map.
+- **`--geojson`** is ideal when the answer feeds a map. A cut collection carries
+  `properties.exceededTransferLimit: true`, and the CLI prints a `Note: more stations
+  match …` line on stderr — mention it rather than presenting the map as complete.
 - **Umlaut field names need quoting in `jq`.** The `{Straße}` shorthand is a jq compile
   error; write `{"Straße": ."Straße"}` or `."Straße"`.
 - **Take the operator from `operator_companyName`.** `Betreiber` is `null` on more than
