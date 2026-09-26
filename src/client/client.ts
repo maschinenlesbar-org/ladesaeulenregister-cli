@@ -110,17 +110,22 @@ export class LadesaeulenClient {
     // expected shape; surface it as a typed parse error rather than letting a
     // downstream `res.features`/`res.count` dereference throw a raw TypeError that
     // is reported as an "Unexpected error".
-    if (res === null || typeof res !== "object") {
-      throw new LadesaeulenParseError(
-        `Expected a JSON object from ${path} but received ${res === null ? "an empty body" : typeof res}.`,
-      );
+    if (res === null || typeof res !== "object" || Array.isArray(res)) {
+      const got = res === null ? "an empty body" : Array.isArray(res) ? "an array" : typeof res;
+      throw shapeError(path, `a JSON object, got ${got}`);
     }
-    const err = res.error;
-    if (err && typeof err === "object") {
+    // Any present, truthy `error` is a failure — ArcGIS writes it as an object,
+    // but a gateway or an older server may send a bare string ("Token Required")
+    // or `true`, which must not pass as an empty, successful result.
+    const err: unknown = res.error;
+    if (err) {
       // The ArcGIS `error` message/details come from the (attacker-controllable)
       // response body and flow into an Error.message printed raw to stderr; strip
       // control characters so a hostile endpoint cannot inject terminal escapes.
-      const detail = [err.message, ...(Array.isArray(err.details) ? err.details : [])]
+      const e = typeof err === "object" ? (err as { code?: unknown; message?: unknown; details?: unknown }) : {};
+      const parts: unknown[] =
+        typeof err === "string" ? [err] : [e.message, ...(Array.isArray(e.details) ? e.details : [])];
+      const detail = parts
         .filter((s): s is string => typeof s === "string" && s.length > 0)
         .map(sanitizeServerText)
         .join("; ");
@@ -129,7 +134,7 @@ export class LadesaeulenClient {
         url: target.url,
         method: target.method,
         body: JSON.stringify(res),
-        arcgisCode: typeof err.code === "number" ? err.code : undefined,
+        arcgisCode: typeof e.code === "number" ? e.code : undefined,
         detail: detail || undefined,
       });
     }

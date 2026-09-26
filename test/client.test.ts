@@ -111,7 +111,9 @@ test("an empty 200 body surfaces as a typed LadesaeulenParseError, not a raw Typ
   const client = new LadesaeulenClient({ transport: mt.transport });
   await assert.rejects(
     () => client.stations(),
-    (err) => err instanceof LadesaeulenParseError && /Expected a JSON object/.test(err.message),
+    (err) =>
+      err instanceof LadesaeulenParseError &&
+      err.message === "Unexpected response shape from /0/query: expected a JSON object, got an empty body.",
   );
 });
 
@@ -217,4 +219,32 @@ test("count() rejects a reply without a non-negative integer count", async () =>
     );
   }
   assert.equal(await clientFor({ count: 0 }).client.count(), 0);
+});
+
+test("a non-object or boolean `error` in a 200 reply is an ArcGIS error, not an empty result", async () => {
+  for (const [body, detail] of [
+    [{ error: "Token Required" }, "Token Required"],
+    [{ error: true }, undefined],
+    [{ error: {} }, undefined],
+  ] as const) {
+    const { client } = clientFor(body);
+    await assert.rejects(
+      () => client.stations(),
+      (err) => err instanceof LadesaeulenApiError && err.detail === detail && /^ArcGIS error for GET /.test(err.message),
+      JSON.stringify(body),
+    );
+  }
+  // A falsy `error` is no error.
+  const ok = clientFor({ ...fx.stations, error: null });
+  assert.equal((await ok.client.stations()).features.length, 2);
+});
+
+test("a JSON array body is a parse error, not an empty page", async () => {
+  const { client } = clientFor([1, 2]);
+  await assert.rejects(
+    () => client.stations(),
+    (err) =>
+      err instanceof LadesaeulenParseError &&
+      err.message === "Unexpected response shape from /0/query: expected a JSON object, got an array.",
+  );
 });

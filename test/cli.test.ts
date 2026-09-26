@@ -230,3 +230,10 @@ test("--count with a non-numeric count exits 1 instead of printing it", async ()
   assert.deepEqual(cli.out, []);
   assert.match(cli.err.join("\n"), /expected a non-negative integer count/);
 });
+
+test("a string ArcGIS error in a 200 reply exits 1 with its text", async () => {
+  const cli = makeCli(() => jsonResponse({ error: "Token Required" }));
+  assert.equal(await run(["stations"], cli.deps), 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(cli.err.join("\n"), /^Error: ArcGIS error for GET \S+: Token Required$/);
+});
