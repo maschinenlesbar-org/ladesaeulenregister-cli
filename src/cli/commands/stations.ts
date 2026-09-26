@@ -25,6 +25,20 @@ function isOutsideGermany(lat: number, lon: number): boolean {
   return lat < 47 || lat > 56 || lon < 5 || lon > 16;
 }
 
+/**
+ * The stderr note for a truncated page. When the page is as long as `--limit`, the
+ * user's own limit cut it; only a shorter page means the server's ~2000-row cap did.
+ */
+function truncationNote(rows: number, limit: number): string {
+  if (rows >= limit) {
+    return `Note: more stations match than the ${rows} returned (--limit ${limit}). Page with --offset, or raise --limit.`;
+  }
+  return (
+    "Note: more stations match than were returned (the server caps a page at ~2000 rows). " +
+    "Page with --offset, or narrow --where."
+  );
+}
+
 /** Build a StationQuery from this command's parsed options. */
 function buildStationQuery(opts: Record<string, unknown>): StationQuery {
   const q: StationQuery = {};
@@ -86,10 +100,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         } else {
           const page = await client.stations(q);
           if (page.exceededTransferLimit) {
-            deps.io.err(
-              "Note: more stations match than were returned (the server caps a page at ~2000 rows). " +
-                "Page with --offset, or narrow --where.",
-            );
+            deps.io.err(truncationNote(page.features.length, q.limit ?? Number.POSITIVE_INFINITY));
           }
           renderJson(deps, global, page);
         }

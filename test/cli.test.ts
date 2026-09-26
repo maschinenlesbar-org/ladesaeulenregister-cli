@@ -248,3 +248,14 @@ test("fields and count-by with null entries exit 1 with a parse error, not 'Unex
     assert.match(cli.err.join("\n"), /^Error: Unexpected response shape from /);
   }
 });
+
+test("the truncation note blames --limit when the page is as long as the limit", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ features: [{ attributes: { ID: "1" } }, { attributes: { ID: "2" } }], exceededTransferLimit: true }),
+  );
+  assert.equal(await run(["stations", "--limit", "2"], cli.deps), 0);
+  assert.equal(
+    cli.err.join("\n"),
+    "Note: more stations match than the 2 returned (--limit 2). Page with --offset, or raise --limit.",
+  );
+});

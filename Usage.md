@@ -36,7 +36,8 @@ ladesaeulen [global options] <command> [command options]
 
 Default output is `{ features, exceededTransferLimit }` — `exceededTransferLimit:
 true` means more matched than were returned (the server caps a page at ~2000 rows).
-The CLI prints a stderr note in that case; page with `--offset` or narrow `--where`.
+The CLI prints a stderr note in that case, saying whether your `--limit` or the server's
+cap cut the page; page with `--offset`, raise `--limit` or narrow `--where`.
 
 ### `count-by <field>` — grouped counts
 
