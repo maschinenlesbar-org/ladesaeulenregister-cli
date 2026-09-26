@@ -51,7 +51,8 @@ ladesaeulen stations --near 52.52,13.405 --radius 2 --geojson --limit 200 > near
 ## Traps
 
 - **`--near` and `--radius` must both be given** (the CLI errors otherwise). `--near`
-  is `lat,lon` (latitude first); `--radius` is in **km**.
+  is `lat,lon` (latitude first); `--radius` is in **km**, a plain decimal from `0.001`
+  (1 m) to `1000` (`0.5`, not `500m` or `5e-1`).
 - **You must supply coordinates** — resolve an address/place to lat/lon before calling;
   the CLI has no geocoder.
 - **Combine `--where` to narrow** (e.g. only `Schnellladeeinrichtung`), and use

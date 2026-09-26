@@ -12,7 +12,7 @@ import {
   parseIntArg,
   parseLatLon,
   parseNonEmpty,
-  parsePositiveFloat,
+  parseRadiusKm,
   renderJson,
 } from "../shared.js";
 
@@ -78,7 +78,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     )
     .option("--fields <list>", "comma-separated field list, or '*' for all (see `fields`)", parseNonEmpty)
     .option("--near <lat,lon>", "only stations near this WGS84 point (needs --radius)", parseLatLon)
-    .option("--radius <km>", "search radius in km for --near", parsePositiveFloat)
+    .option("--radius <km>", "search radius in km for --near (0.001..1000)", parseRadiusKm)
     .option("--count", "print only the number of matching stations")
     .option("--geojson", "output a GeoJSON FeatureCollection instead of ArcGIS JSON")
     .action(

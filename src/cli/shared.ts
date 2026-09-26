@@ -4,7 +4,7 @@
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
-import type { LadesaeulenClientOptions } from "../client/client.js";
+import { MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "../client/client.js";
 
 /**
  * commander value-parser: a plain base-10 non-negative integer.
@@ -76,13 +76,20 @@ export function parseBoundedInt(min: number, max: number): (value: string) => nu
   };
 }
 
-/** commander value-parser: a strictly-positive decimal number (e.g. a radius in km). */
-export function parsePositiveFloat(value: string): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new InvalidArgumentError("Expected a positive number.");
+/**
+ * commander value-parser for `--radius`: a plain decimal number of km (`2`, `0.5`)
+ * from `MIN_RADIUS_KM` to `MAX_RADIUS_KM`. A strict regex rather than `Number()`,
+ * which accepts hex (`0x10`), exponents (`1e308`) and padding.
+ */
+export function parseRadiusKm(value: string): number {
+  if (!/^\d+(?:\.\d+)?$/.test(value)) {
+    throw new InvalidArgumentError("Expected a radius in km as a plain decimal number (e.g. 2.5).");
   }
-  return n;
+  const km = Number(value);
+  if (km < MIN_RADIUS_KM || km > MAX_RADIUS_KM) {
+    throw new InvalidArgumentError(`Radius must be between ${MIN_RADIUS_KM} and ${MAX_RADIUS_KM} km.`);
+  }
+  return km;
 }
 
 /** commander value-parser for `--near`: a `lat,lon` pair in WGS84 degrees. */

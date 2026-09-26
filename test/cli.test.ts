@@ -299,3 +299,16 @@ test("--base-url with a query, fragment or surrounding whitespace is a usage err
   assert.equal(await run(["--base-url", "http://127.0.0.1:1/mirror/fs/", "stations", "--count"], ok.deps), 0);
   assert.equal(new URL(ok.mt.last().url).pathname, "/mirror/fs/0/query");
 });
+
+test("--radius must be a plain decimal from 0.001 to 1000 km (usage error, no request)", async () => {
+  for (const bad of ["0.0004", "1e308", "100000", "0x10", "1e1", " 2", "+2", "-1", "0", "NaN", ".5"]) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["stations", "--near", "52.52,13.405", "--radius", bad, "--count"], cli.deps), 2, bad);
+    assert.equal(cli.mt.calls.length, 0, bad);
+  }
+  for (const [good, metres] of [["0.001", "1"], ["1000", "1000000"], ["2.5", "2500"]] as const) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["stations", "--near", "52.52,13.405", "--radius", good, "--count"], cli.deps), 0, good);
+    assert.equal(queryOf(cli.mt.last()).get("distance"), metres);
+  }
+});

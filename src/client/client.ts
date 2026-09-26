@@ -122,6 +122,19 @@ function featureList(features: unknown, path: string): Feature[] {
   return features as Feature[];
 }
 
+/**
+ * Smallest `--near` radius in km: 1 m. The radius goes to ArcGIS in whole metres,
+ * so anything below half a metre would be sent as `distance=0` and match nothing.
+ */
+export const MIN_RADIUS_KM = 0.001;
+
+/**
+ * Largest `--near` radius in km. 1,000 km from any point in Germany covers nearly
+ * all of it; far larger values fail upstream ("exceeds the full globe") or are sent
+ * as `distance=Infinity`.
+ */
+export const MAX_RADIUS_KM = 1000;
+
 /** Options for the client (engine options only — the API needs no auth). */
 export type LadesaeulenClientOptions = EngineOptions;
 

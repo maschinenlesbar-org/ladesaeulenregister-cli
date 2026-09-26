@@ -30,7 +30,7 @@ ladesaeulen [global options] <command> [command options]
 | `--order-by <spec>` | sort, e.g. `"Ort ASC"` or `"CAST(max_electric_power_station AS FLOAT) DESC"` (power is a text column; without the cast it sorts as text) |
 | `--fields <list>` | comma-separated field list, or `'*'` for all |
 | `--near <lat,lon>` | only stations near this WGS84 point (needs `--radius`) |
-| `--radius <km>` | search radius in km for `--near` |
+| `--radius <km>` | search radius in km for `--near`: a plain decimal from `0.001` (1 m) to `1000` |
 | `--count` | print only the number of matching stations |
 | `--geojson` | output a GeoJSON FeatureCollection instead of ArcGIS JSON |
 
