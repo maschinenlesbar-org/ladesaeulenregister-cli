@@ -1,6 +1,6 @@
 {
   "name": "ladesaeulen",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "German EV charging-station skills powered by the ladesaeulenregister-cli (Bundesnetzagentur Ladesäulenregister).",
   "author": {
     "name": "Sebastian Schürmann",
