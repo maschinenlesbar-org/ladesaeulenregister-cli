@@ -215,3 +215,12 @@ test("parseRetryAfter reads delay-seconds and IMF-fixdate HTTP-dates only", () =
   assert.equal(parseRetryAfter("Wednesday, 21-Oct-26 07:28:10 GMT", now), undefined);
   assert.equal(parseRetryAfter(undefined, now), undefined);
 });
+
+test("the engine rejects a base URL with a query or fragment", () => {
+  for (const baseUrl of ["https://example.test/fs?x=1", "https://example.test/fs#f"]) {
+    assert.throws(
+      () => new RequestEngine({ baseUrl }),
+      (err) => err instanceof LadesaeulenNetworkError && err.message === `Base URL must not contain a query or fragment: ${baseUrl}`,
+    );
+  }
+});

@@ -281,3 +281,21 @@ test("count-by prints a note when the server cut the group list", async () => {
   );
   assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
 });
+
+test("--base-url with a query, fragment or surrounding whitespace is a usage error, no request", async () => {
+  for (const [url, msg] of [
+    ["http://127.0.0.1:1/fs?x=1", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:1/fs#frag", /cannot have a query \(\?\) or fragment \(#\)/],
+    [" http://127.0.0.1:1/fs ", /cannot have surrounding whitespace/],
+    ["http://127.0.0.1:1/fs ", /cannot have surrounding whitespace/],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["--base-url", url, "stations", "--count"], cli.deps), 2, url);
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), msg);
+  }
+  // A path prefix still works.
+  const ok = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["--base-url", "http://127.0.0.1:1/mirror/fs/", "stations", "--count"], ok.deps), 0);
+  assert.equal(new URL(ok.mt.last().url).pathname, "/mirror/fs/0/query");
+});
