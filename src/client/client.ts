@@ -16,6 +16,7 @@ import type { QueryParams } from "./query.js";
 import type {
   ArcGisQueryResponse,
   CountByRow,
+  Feature,
   FieldInfo,
   StationPage,
   StationQuery,
@@ -87,6 +88,36 @@ function groupValue(attributes: Record<string, unknown>, field: string, path: st
 /** The error for a reply whose top-level shape is not what the client relies on. */
 function shapeError(path: string, expected: string): LadesaeulenParseError {
   return new LadesaeulenParseError(`Unexpected response shape from ${path}: expected ${expected}.`);
+}
+
+/** A short description of a JSON value for a shape error ("null", "a string", …). */
+function kindOf(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  if (typeof value === "object") return "an object";
+  return `a ${typeof value}`;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * The `features` of a query reply, checked: an array whose every element is a
+ * JSON object with an `attributes` object. Anything else is a malformed reply —
+ * library users are typed against `Feature[]` and the CLI reads `attributes`.
+ */
+function featureList(features: unknown, path: string): Feature[] {
+  if (!Array.isArray(features)) throw shapeError(path, "a features array");
+  features.forEach((f: unknown, i) => {
+    if (!isObject(f)) {
+      throw shapeError(path, `every feature to be a JSON object with an attributes object, feature ${i} is ${kindOf(f)}`);
+    }
+    if (!isObject(f["attributes"])) {
+      throw shapeError(path, `every feature to be a JSON object with an attributes object, feature ${i} has none`);
+    }
+  });
+  return features as Feature[];
 }
 
 /** Options for the client (engine options only — the API needs no auth). */
@@ -166,7 +197,10 @@ export class LadesaeulenClient {
       { f: "json", returnGeometry: false },
     );
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
-    return { features: res.features ?? [], exceededTransferLimit: res.exceededTransferLimit ?? false };
+    return {
+      features: featureList(res.features, `${LAYER}/query`),
+      exceededTransferLimit: res.exceededTransferLimit === true,
+    };
   }
 
   /** The number of stations matching the query (`returnCountOnly`). */

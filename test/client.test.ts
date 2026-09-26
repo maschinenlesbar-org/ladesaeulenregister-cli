@@ -248,3 +248,25 @@ test("a JSON array body is a parse error, not an empty page", async () => {
       err.message === "Unexpected response shape from /0/query: expected a JSON object, got an array.",
   );
 });
+
+test("stations() rejects a reply whose features are missing, not an array, or not feature objects", async () => {
+  const cases: [unknown, string][] = [
+    [{}, "expected a features array."],
+    [{ features: "x" }, "expected a features array."],
+    [{ features: [{ attributes: {} }, 1] }, "feature 1 is a number."],
+    [{ features: [null] }, "feature 0 is null."],
+    [{ features: [{ attributes: null }] }, "feature 0 has none."],
+  ];
+  for (const [body, tail] of cases) {
+    const { client } = clientFor(body);
+    await assert.rejects(
+      () => client.stations(),
+      (err) =>
+        err instanceof LadesaeulenParseError &&
+        err.message.startsWith("Unexpected response shape from /0/query: expected ") &&
+        err.message.endsWith(tail),
+      JSON.stringify(body),
+    );
+  }
+  assert.deepEqual(await clientFor({ features: [] }).client.stations(), { features: [], exceededTransferLimit: false });
+});
