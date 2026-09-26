@@ -41,7 +41,9 @@ The CLI prints a stderr note in that case; page with `--offset` or narrow `--whe
 ### `count-by <field>` — grouped counts
 
 `ladesaeulen count-by state` → `[{ value, count }, …]`, sorted by count desc. Add
-`--where` to aggregate a subset. Good fields: `state`, `Typ`, `operator_companyName`, `Ort`
+`--where` to aggregate a subset. It groups by **one** field: a comma-separated list
+(`state,Typ`) is a usage error — group by one field and fix the other with `--where`
+(`count-by state --where "Typ='Schnellladeeinrichtung'"`). Good fields: `state`, `Typ`, `operator_companyName`, `Ort`
 (`Betreiber` is `null` on more than half of the stations). The result stops at 2,000
 groups (the server's page limit, no note is printed); the top groups are still correct
 because the server sorts by count first.

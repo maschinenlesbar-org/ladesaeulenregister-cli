@@ -11,7 +11,7 @@
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
 import { RequestEngine, sanitizeServerText, type EngineOptions } from "./engine.js";
-import { LadesaeulenApiError, LadesaeulenParseError } from "./errors.js";
+import { LadesaeulenApiError, LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import type {
   ArcGisQueryResponse,
@@ -48,6 +48,41 @@ export const DEFAULT_FIELDS = [
   "go_live_date",
   "Bezahlsystem",
 ].join(",");
+
+/**
+ * Check and trim a `countBy` field name. ArcGIS groups by a comma-separated list
+ * too, but each group then carries several values and `CountByRow` has room for
+ * one, so a list is refused rather than returning `value: null` for every group.
+ */
+function groupField(field: string): string {
+  const name = typeof field === "string" ? field.trim() : "";
+  if (name === "") {
+    throw new LadesaeulenValidationError(`Invalid field: expected a field name, got ${JSON.stringify(field)}.`);
+  }
+  if (name.includes(",")) {
+    throw new LadesaeulenValidationError(
+      `Invalid field: expected one field name, got a list: ${JSON.stringify(name)}. ` +
+        "Group by one field and restrict the others with a where filter.",
+    );
+  }
+  return name;
+}
+
+/**
+ * The group-by value of one `countBy` row: the attribute named like the field, or
+ * — should a server echo the field in its own spelling — the one attribute that
+ * matches it case-insensitively. A row without it is a malformed reply, not a
+ * `null` group (the register has real `null` groups, e.g. `Betreiber`).
+ */
+function groupValue(attributes: Record<string, unknown>, field: string, path: string, i: number): unknown {
+  if (Object.prototype.hasOwnProperty.call(attributes, field)) return attributes[field];
+  const lower = field.toLowerCase();
+  const keys = Object.keys(attributes).filter((k) => k.toLowerCase() === lower);
+  if (keys.length === 1) return attributes[keys[0]!];
+  throw new LadesaeulenParseError(
+    `Unexpected response shape from ${path}: expected the group-by field ${JSON.stringify(field)} in every group, group ${i} has none.`,
+  );
+}
 
 /** Options for the client (engine options only — the API needs no auth). */
 export type LadesaeulenClientOptions = EngineOptions;
@@ -142,14 +177,17 @@ export class LadesaeulenClient {
   }
 
   /**
-   * Grouped station counts by a field (ArcGIS `outStatistics` group-by), e.g.
+   * Grouped station counts by one field (ArcGIS `outStatistics` group-by), e.g.
    * `countBy("state")` for stations per Bundesland. Sorted descending by count.
+   * The field name is trimmed; a comma-separated list is a
+   * `LadesaeulenValidationError`.
    */
   async countBy(field: string, where = "1=1"): Promise<CountByRow[]> {
+    const name = groupField(field);
     const params: QueryParams = {
       where,
       f: "json",
-      groupByFieldsForStatistics: field,
+      groupByFieldsForStatistics: name,
       outStatistics: JSON.stringify([
         { statisticType: "count", onStatisticField: "OBJECTID", outStatisticFieldName: "count" },
       ]),
@@ -164,8 +202,8 @@ export class LadesaeulenClient {
         `Expected "features" to be an array in the response from ${LAYER}/query, got ${typeof res.features}.`,
       );
     }
-    return (res.features ?? []).map((f) => ({
-      value: (f.attributes[field] as string | number | null) ?? null,
+    return (res.features ?? []).map((f, i) => ({
+      value: (groupValue(f.attributes, name, `${LAYER}/query`, i) as string | number | null) ?? null,
       count: Number(f.attributes["count"] ?? 0),
     }));
   }

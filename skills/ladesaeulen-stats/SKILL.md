@@ -62,8 +62,11 @@ echo "fast: $fast / total: $total"
 
 - **`count-by` is server-side aggregation** — it counts all matching stations, not
   just a page, so it is exact and cheap. Prefer it over paging + counting yourself.
-- **Group by a real column** — confirm the field name with `ladesaeulen fields`
-  (they include German umlauts, e.g. `Straße`).
+- **Group by one real column** — confirm the field name with `ladesaeulen fields`
+  (they include German umlauts, e.g. `Straße`). `count-by` takes a single field; a list
+  such as `state,Typ` is refused (exit 2). For a two-way breakdown, run one `count-by`
+  per value of the second field with `--where` (e.g. `count-by state --where
+  "Typ='Schnellladeeinrichtung'"`).
 - **Group operators by `operator_companyName`, not `Betreiber`.** `Betreiber` is `null`
   on more than half of all stations, so `count-by Betreiber` puts a `null` group first
   (17,327 of 31,188 fast chargers on 2026-09-15) and misses big operators such as Tesla

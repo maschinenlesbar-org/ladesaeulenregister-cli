@@ -216,3 +216,10 @@ test("--compact prints single-line JSON", async () => {
   await run(["stations", "--compact"], cli.deps);
   assert.equal(cli.out.length, 1);
 });
+
+test("count-by with a field list is a usage error (exit 2), no request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countByState));
+  assert.equal(await run(["count-by", "state,Typ"], cli.deps), 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /expected one field name, got a list/);
+});

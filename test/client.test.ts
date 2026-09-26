@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LadesaeulenClient, DEFAULT_FIELDS } from "../src/client/client.js";
-import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "../src/client/errors.js";
+import {
+  LadesaeulenApiError,
+  LadesaeulenNetworkError,
+  LadesaeulenParseError,
+  LadesaeulenValidationError,
+} from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -168,4 +173,34 @@ test("an ArcGIS error envelope on a POSTed (long) query names POST and the bare 
       err.method === "POST" &&
       /^ArcGIS error 400 for POST https:\/\/\S+\/0\/query: bad where$/.test(err.message),
   );
+});
+
+test("countBy() trims the field name before sending and reading it back", async () => {
+  const { client, mt } = clientFor({ features: [{ attributes: { state: "Bremen", count: 884 } }] });
+  assert.deepEqual(await client.countBy(" state "), [{ value: "Bremen", count: 884 }]);
+  assert.equal(queryOf(mt.last()).get("groupByFieldsForStatistics"), "state");
+});
+
+test("countBy() refuses a field list with a validation error and sends nothing", async () => {
+  const { client, mt } = clientFor(fx.countByState);
+  await assert.rejects(
+    () => client.countBy("state,Typ"),
+    (err) => err instanceof LadesaeulenValidationError && /expected one field name, got a list: "state,Typ"/.test(err.message),
+  );
+  assert.equal(mt.calls.length, 0);
+});
+
+test("countBy() reads a group value echoed in another case, and rejects a group without it", async () => {
+  const { client } = clientFor({ features: [{ attributes: { state: "Bremen", count: 884 } }] });
+  assert.deepEqual(await client.countBy("STATE"), [{ value: "Bremen", count: 884 }]);
+  const missing = clientFor({ features: [{ attributes: { count: 884 } }] });
+  await assert.rejects(
+    () => missing.client.countBy("state"),
+    (err) =>
+      err instanceof LadesaeulenParseError &&
+      err.message === 'Unexpected response shape from /0/query: expected the group-by field "state" in every group, group 0 has none.',
+  );
+  // A real null group stays a null value.
+  const nullGroup = clientFor({ features: [{ attributes: { Betreiber: null, count: 5 } }] });
+  assert.deepEqual(await nullGroup.client.countBy("Betreiber"), [{ value: null, count: 5 }]);
 });
