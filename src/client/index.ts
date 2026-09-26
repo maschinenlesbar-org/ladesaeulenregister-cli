@@ -2,7 +2,13 @@
 
 export { LadesaeulenClient, DEFAULT_FIELDS } from "./client.js";
 export type { LadesaeulenClientOptions } from "./client.js";
-export { RequestEngine, DEFAULT_BASE_URL, MAX_GET_URL_LENGTH } from "./engine.js";
+export {
+  RequestEngine,
+  DEFAULT_BASE_URL,
+  MAX_GET_URL_LENGTH,
+  MAX_RETRY_AFTER_MS,
+  parseRetryAfter,
+} from "./engine.js";
 export type { EngineOptions, RawResponse, RequestTarget } from "./engine.js";
 export { MAX_TIMEOUT_MS, nodeHttpTransport } from "./http.js";
 export type { Transport, HttpRequest, HttpResponse } from "./http.js";

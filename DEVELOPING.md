@@ -65,6 +65,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `resultOffset` (paging), `orderByFields`, `f` (`json`|`geojson`), `returnCountOnly`,
   `outStatistics`+`groupByFieldsForStatistics` (used by `countBy`), and geometry
   params (`geometry`/`geometryType`/`inSR`/`distance`/`units`/`spatialRel`) for `--near`.
+- **Retries honour `Retry-After`.** A 429/503 is retried up to `maxRetries` times, each
+  after the response's `Retry-After` (delay-seconds or an IMF-fixdate, parsed strictly by
+  `parseRetryAfter`), else after `retryDelayMs * attempt`. A `Retry-After` above
+  `MAX_RETRY_AFTER_MS` (30 s) is not retried: the error surfaces at once.
 - **Long queries go as a POST.** ArcGIS Online answers a GET URL of about 2.9 KB with a
   misleading HTTP 404 (and above about 20 KB with 414). `/query` takes the same parameters
   as an `application/x-www-form-urlencoded` POST body, so the engine switches to a POST to

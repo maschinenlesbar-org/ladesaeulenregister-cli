@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RequestEngine, MAX_GET_URL_LENGTH } from "../src/client/engine.js";
+import { RequestEngine, MAX_GET_URL_LENGTH, parseRetryAfter } from "../src/client/engine.js";
 import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
@@ -163,4 +163,55 @@ test("an HTTP error on a POSTed query names POST and the bare URL", async () => 
     () => e.getJson("/0/query", { where: "x".repeat(3000) }),
     (err) => err instanceof LadesaeulenApiError && err.message === "HTTP 400 for POST https://example.test/FS/0/query: nope",
   );
+});
+
+function retryingEngine(retryAfter: string | undefined) {
+  const delays: number[] = [];
+  const mt = makeMockTransport(() => {
+    const res = jsonResponse({ error: { message: "slow down" } }, 429);
+    if (retryAfter !== undefined) res.headers["retry-after"] = retryAfter;
+    return res;
+  });
+  const engine = new RequestEngine({
+    transport: mt.transport,
+    maxRetries: 2,
+    sleep: async (ms) => {
+      delays.push(ms);
+    },
+  });
+  return { engine, mt, delays };
+}
+
+test("a 429 waits the Retry-After seconds before each retry", async () => {
+  const { engine, mt, delays } = retryingEngine("1");
+  await assert.rejects(() => engine.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 429);
+  assert.deepEqual(delays, [1000, 1000]);
+  assert.equal(mt.calls.length, 3);
+});
+
+test("a malformed Retry-After falls back to the linear backoff", async () => {
+  for (const bad of ["-1", "1.5", "+5", "1e3", "0x10", "soon", "2026-10-21T07:28:00Z", ""]) {
+    const { engine, delays } = retryingEngine(bad);
+    await assert.rejects(() => engine.getJson("/x"), LadesaeulenApiError);
+    assert.deepEqual(delays, [200, 400], bad);
+  }
+});
+
+test("a Retry-After beyond MAX_RETRY_AFTER_MS is not retried", async () => {
+  for (const long of ["31", "99999999999", "Wed, 21 Oct 2099 07:28:00 GMT"]) {
+    const { engine, mt, delays } = retryingEngine(long);
+    await assert.rejects(() => engine.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 429);
+    assert.equal(mt.calls.length, 1, long);
+    assert.deepEqual(delays, [], long);
+  }
+});
+
+test("parseRetryAfter reads delay-seconds and IMF-fixdate HTTP-dates only", () => {
+  const now = Date.parse("Wed, 21 Oct 2026 07:28:00 GMT");
+  assert.equal(parseRetryAfter("5", now), 5000);
+  assert.equal(parseRetryAfter([" 7 ", "9"], now), 7000);
+  assert.equal(parseRetryAfter("Wed, 21 Oct 2026 07:28:10 GMT", now), 10_000);
+  assert.equal(parseRetryAfter("Wed, 21 Oct 2026 07:27:00 GMT", now), 0);
+  assert.equal(parseRetryAfter("Wednesday, 21-Oct-26 07:28:10 GMT", now), undefined);
+  assert.equal(parseRetryAfter(undefined, now), undefined);
 });

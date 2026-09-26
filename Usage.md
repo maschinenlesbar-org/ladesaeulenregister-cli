@@ -13,7 +13,7 @@ ladesaeulen [global options] <command> [command options]
 | `--base-url <url>` | API base URL (the ArcGIS FeatureServer) |
 | `--timeout <ms>` | time limit per request in ms, whole response included (0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value |
-| `--max-retries <n>` | retries for transient 429/503 responses (0..10) |
+| `--max-retries <n>` | retries for transient 429/503 responses (0..10). Each retry waits the server's `Retry-After` (seconds or an HTTP-date), else 200 ms, 400 ms, …; a `Retry-After` above 30 s is not retried — the error is reported at once |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `-V, --version` / `-h, --help` | version / help |
