@@ -324,3 +324,39 @@ test("parity: a base URL with surrounding whitespace is rejected by both, no req
   assert.ok(res.ok);
   assert.deepEqual(requestShapes(res.requests), requestShapes(cli.requests));
 });
+
+// ---- #6 (PAT-2): a malformed base URL is a validation error, not a network error ----
+
+test("baseUrlProblem names every malformed shape with the CLI's wording", () => {
+  const cases: [string, string][] = [
+    ["", "Expected a non-empty value."],
+    ["   ", "Expected a non-empty value."],
+    ["not a url", "Expected a valid URL (e.g. https://host/path)."],
+    ["ftp://example.org/fs", "Only http: and https: base URLs are supported."],
+    ["file:///etc/x", "Only http: and https: base URLs are supported."],
+    ["https://h.example/fs?x=1", "A base URL cannot have a query (?) or fragment (#)."],
+    ["https://h.example/fs#f", "A base URL cannot have a query (?) or fragment (#)."],
+  ];
+  for (const [raw, reason] of cases) assert.equal(baseUrlProblem(raw), reason, JSON.stringify(raw));
+  assert.equal(baseUrlProblem(42 as unknown as string), "Expected a string, got 42.");
+  assert.equal(baseUrlProblem("http://127.0.0.1:1/mirror/fs/"), undefined);
+});
+
+test("parity: a malformed base URL is rejected by both as a validation error, no request", async () => {
+  for (const baseUrl of ["ftp://example.org/fs", "https://h.example/fs?x=1", "https://h.example/fs#f", "not a url", "", "   ", "file:///etc/x"]) {
+    const { cli, lib: res } = await parity(
+      ["--compact", "--base-url", baseUrl, "stations", "--count"],
+      (transport) => new LadesaeulenClient({ baseUrl, transport }).count(),
+      () => jsonResponse({ count: 42 }),
+    );
+    assert.equal(cli.code, 2, JSON.stringify(baseUrl));
+    assert.equal(cli.requests.length, 0);
+    assert.equal(res.ok, false, JSON.stringify(baseUrl));
+    const error = (res as { error: unknown }).error;
+    assert.ok(error instanceof LadesaeulenValidationError, JSON.stringify(baseUrl));
+    assert.ok(!(error instanceof LadesaeulenNetworkError));
+    assert.equal((error as Error).message, `Invalid baseUrl: ${baseUrlProblem(baseUrl)}`);
+    assert.match(cli.err, new RegExp(baseUrlProblem(baseUrl)!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.equal(res.requests.length, 0);
+  }
+});

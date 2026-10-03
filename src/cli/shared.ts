@@ -34,33 +34,13 @@ export function parseNonEmpty(value: string): string {
 }
 
 /**
- * commander value-parser for `--base-url`: a non-empty, well-formed URL whose
- * scheme is `http:` or `https:`. Validating here (parse time) rejects a bad
- * scheme (`file:`, `ftp:`, ...) as a usage error (exit 2) with a clear message,
- * rather than letting it reach the transport and surface as a network error
- * (exit 6). The transport re-checks the scheme as defence in depth.
+ * commander value-parser for `--base-url`: the library's `baseUrlProblem` (a
+ * non-empty, well-formed `http:`/`https:` URL with no query, fragment or
+ * surrounding whitespace), whose reason becomes the usage error (exit 2). The
+ * engine runs the same rule when the client is built, and the transport re-checks
+ * the scheme per hop as defence in depth.
  */
 export function parseBaseUrl(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    throw new InvalidArgumentError("Expected a non-empty value.");
-  }
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    throw new InvalidArgumentError("Expected a valid URL (e.g. https://host/path).");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new InvalidArgumentError("Only http: and https: base URLs are supported.");
-  }
-  // Paths are appended to the base URL as a string, so a query or fragment would
-  // swallow every request path ("http://h/#f" requests "/" for every command).
-  if (/[?#]/.test(value)) {
-    throw new InvalidArgumentError("A base URL cannot have a query (?) or fragment (#).");
-  }
-  // The check above parsed the trimmed value, but the raw value is what the engine
-  // uses: the library's baseUrlProblem refuses surrounding whitespace.
   const reason = baseUrlProblem(value);
   if (reason !== undefined) throw new InvalidArgumentError(reason);
   return value;

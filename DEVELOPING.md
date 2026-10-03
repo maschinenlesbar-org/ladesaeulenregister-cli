@@ -89,9 +89,12 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `defaultHeaders` name an HTTP token (`headerValueProblem`/`headerNameProblem`,
   `assertHeaderValue`). `--user-agent` runs the same rule. The default transport
   turns Node's own synchronous header error into a `LadesaeulenNetworkError`.
-  The base URL is checked raw, before the trailing-slash strip (`validateBaseUrl`):
-  surrounding whitespace is refused (`baseUrlProblem`), because the engine appends
-  request paths to the raw string. `--base-url` runs the same rule.
+  The base URL is checked raw, before the trailing-slash strip (`validateBaseUrl`,
+  `baseUrlProblem`): blank, unparsable, not `http:`/`https:`, a query or fragment, or
+  surrounding whitespace (the engine appends request paths to the raw string) is a
+  `LadesaeulenValidationError` (`Invalid baseUrl: …`), not a network error.
+  `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
+  transport's per-hop scheme check and real transport failures.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,

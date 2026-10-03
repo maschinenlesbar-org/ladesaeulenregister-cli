@@ -66,12 +66,28 @@ export const headerNameProblem: Problem<string> = (name) =>
     : `Expected an HTTP header name (a token), got ${show(name)}.`;
 
 /**
- * A rule for a configured base URL. Request paths are appended to the raw string,
- * so surrounding whitespace would end up in every request URL (`/fs%20/0/query`),
- * while `new URL()` trims it silently: refuse it rather than guess.
+ * A rule for a configured base URL: a non-blank, well-formed `http:`/`https:` URL
+ * with no query, fragment or surrounding whitespace. Request paths are appended to
+ * the raw string, so a `?` or `#` would swallow every path (`http://h/fs?x=1`
+ * requests `/fs?x=1/0/query?...`, `http://h/fs#f` requests `/fs` with no
+ * parameters), and surrounding whitespace, which `new URL()` trims silently, would
+ * end up in every request URL (`/fs%20/0/query`).
  */
 export const baseUrlProblem: Problem<string> = (raw) => {
-  if (typeof raw === "string" && raw !== raw.trim()) return "A base URL cannot have surrounding whitespace.";
+  if (typeof raw !== "string") return `Expected a string, got ${show(raw)}.`;
+  const trimmed = raw.trim();
+  if (trimmed === "") return "Expected a non-empty value.";
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return "Expected a valid URL (e.g. https://host/path).";
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return "Only http: and https: base URLs are supported.";
+  }
+  if (/[?#]/.test(raw)) return "A base URL cannot have a query (?) or fragment (#).";
+  if (raw !== trimmed) return "A base URL cannot have surrounding whitespace.";
   return undefined;
 };
 

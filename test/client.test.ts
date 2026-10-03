@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { LadesaeulenClient, DEFAULT_FIELDS } from "../src/client/client.js";
 import {
   LadesaeulenApiError,
-  LadesaeulenNetworkError,
   LadesaeulenParseError,
   LadesaeulenValidationError,
 } from "../src/client/errors.js";
@@ -163,7 +162,7 @@ test("geojson() requests f=geojson and returns the FeatureCollection", async () 
 test("the client rejects a non-http(s) base URL before any request, even with a custom transport", () => {
   for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
     const mt = makeMockTransport(() => jsonResponse(fx.stations));
-    assert.throws(() => new LadesaeulenClient({ baseUrl, transport: mt.transport }), LadesaeulenNetworkError);
+    assert.throws(() => new LadesaeulenClient({ baseUrl, transport: mt.transport }), LadesaeulenValidationError);
     assert.equal(mt.calls.length, 0);
   }
 });

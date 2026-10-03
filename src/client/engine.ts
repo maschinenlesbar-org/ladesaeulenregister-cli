@@ -7,7 +7,7 @@
 import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
 import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
 import { buildQueryString, type QueryParams } from "./query.js";
-import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "./errors.js";
+import { LadesaeulenApiError, LadesaeulenParseError } from "./errors.js";
 
 export const DEFAULT_BASE_URL =
   "https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeulen/FeatureServer";
@@ -181,43 +181,17 @@ export function describeArcGisError(error: unknown): string | undefined {
 }
 
 /**
- * Check a configured base URL and return it with trailing slashes stripped. Runs
- * on the raw value, before the slash strip: surrounding whitespace is a
- * LadesaeulenValidationError (`baseUrlProblem`), since `new URL()` trims it but
- * the engine appends request paths to the raw string, so `"https://h/fs "` would
- * request `/fs%20/0/query` and `"https://h/fs/ "` would slip past the slash strip.
- * Then the scheme, query and fragment checks of `assertHttpScheme` apply.
+ * Check a configured base URL (`baseUrlProblem`) and return it with trailing
+ * slashes stripped, or throw a LadesaeulenValidationError (`Invalid baseUrl:
+ * <reason>`): blank, surrounding whitespace, unparsable, a scheme other than
+ * http(s), a query or a fragment. Runs on the raw value, before the slash strip,
+ * so `"https://h/fs/ "` cannot slip past it. The default transport still gates the
+ * scheme per hop (a LadesaeulenNetworkError there), but the engine may be handed a
+ * custom transport that does no such check, so a `file:`/`ftp:` base URL fails
+ * here, before any request.
  */
 export function validateBaseUrl(raw: string): string {
-  assertValid("baseUrl", raw, baseUrlProblem);
-  assertHttpScheme(raw);
-  return raw.replace(/\/+$/, "");
-}
-
-/**
- * Reject a base URL whose scheme is not http(s), or that has a query or fragment.
- * The default transport already gates the scheme per hop, but the engine is
- * exported as a library and may be handed a custom transport that does no such
- * check, so gate the configured base URL here too (a `file:`/`ftp:` base URL fails
- * fast with a typed error). Request paths are appended to the base URL as a string,
- * so a `?` or `#` in it would swallow every path: `http://h/fs?x=1` requests
- * `/fs?x=1/0/query?...` and `http://h/fs#f` requests `/fs` with no parameters.
- */
-function assertHttpScheme(baseUrl: string): void {
-  let url: URL;
-  try {
-    url = new URL(baseUrl);
-  } catch {
-    throw new LadesaeulenNetworkError(`Invalid base URL: ${baseUrl}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new LadesaeulenNetworkError(
-      `Unsupported protocol "${url.protocol}" in base URL: ${baseUrl}`,
-    );
-  }
-  if (/[?#]/.test(baseUrl)) {
-    throw new LadesaeulenNetworkError(`Base URL must not contain a query or fragment: ${baseUrl}`);
-  }
+  return assertValid("baseUrl", raw, baseUrlProblem).replace(/\/+$/, "");
 }
 
 /**

@@ -64,8 +64,8 @@ export class LadesaeulenNetworkError extends LadesaeulenError {}
 
 /**
  * A client-side validation error — a bad CLI option or library argument (a blank
- * `where`, an out-of-range `near`/`limit`/`offset`, a `countBy` field list). No
- * request is made.
+ * `where`, an out-of-range `near`/`limit`/`offset`, a `countBy` field list, a
+ * malformed `baseUrl`, an out-of-range engine option). No request is made.
  */
 export class LadesaeulenValidationError extends LadesaeulenError {}
 

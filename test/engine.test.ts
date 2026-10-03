@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RequestEngine, MAX_GET_URL_LENGTH, parseRetryAfter } from "../src/client/engine.js";
-import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "../src/client/errors.js";
+import {
+  LadesaeulenApiError,
+  LadesaeulenParseError,
+  LadesaeulenValidationError,
+} from "../src/client/errors.js";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -119,14 +123,21 @@ test("the engine rejects a non-http(s) base URL before any request, even with a 
     const mt = makeMockTransport(() => jsonResponse(fx.stations));
     assert.throws(
       () => new RequestEngine({ baseUrl, transport: mt.transport }),
-      (err) => err instanceof LadesaeulenNetworkError && /Unsupported protocol/.test(err.message),
+      (err) =>
+        err instanceof LadesaeulenValidationError &&
+        err.message === "Invalid baseUrl: Only http: and https: base URLs are supported.",
     );
     assert.equal(mt.calls.length, 0);
   }
 });
 
 test("the engine rejects an unparseable base URL", () => {
-  assert.throws(() => new RequestEngine({ baseUrl: "not a url" }), LadesaeulenNetworkError);
+  assert.throws(
+    () => new RequestEngine({ baseUrl: "not a url" }),
+    (err) =>
+      err instanceof LadesaeulenValidationError &&
+      err.message === "Invalid baseUrl: Expected a valid URL (e.g. https://host/path).",
+  );
 });
 
 test("a query whose GET URL would exceed MAX_GET_URL_LENGTH goes out as a form POST", async () => {
@@ -220,7 +231,9 @@ test("the engine rejects a base URL with a query or fragment", () => {
   for (const baseUrl of ["https://example.test/fs?x=1", "https://example.test/fs#f"]) {
     assert.throws(
       () => new RequestEngine({ baseUrl }),
-      (err) => err instanceof LadesaeulenNetworkError && err.message === `Base URL must not contain a query or fragment: ${baseUrl}`,
+      (err) =>
+        err instanceof LadesaeulenValidationError &&
+        err.message === "Invalid baseUrl: A base URL cannot have a query (?) or fragment (#).",
     );
   }
 });
