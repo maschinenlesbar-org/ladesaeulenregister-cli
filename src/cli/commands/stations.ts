@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import type { CliDeps } from "../io.js";
 import type { StationQuery } from "../../client/types.js";
 import { LadesaeulenValidationError } from "../../client/errors.js";
-import { MAX_LIMIT } from "../../client/client.js";
+import { DEFAULT_LIMIT, MAX_LIMIT } from "../../client/client.js";
 import {
   action,
   parseBoundedInt,
@@ -40,9 +40,6 @@ function truncationNote(rows: number, limit: number): string {
   );
 }
 
-/** Rows per `stations` page when `--limit` is not given. */
-const DEFAULT_LIMIT = 50;
-
 /** Options that shape a page of rows and so mean nothing to `--count`. */
 const PAGE_OPTIONS: readonly [key: string, flag: string][] = [
   ["limit", "--limit"],
@@ -55,7 +52,7 @@ const PAGE_OPTIONS: readonly [key: string, flag: string][] = [
 function buildStationQuery(opts: Record<string, unknown>): StationQuery {
   const q: StationQuery = {};
   if (typeof opts["where"] === "string") q.where = opts["where"];
-  if (opts["count"] !== true) q.limit = typeof opts["limit"] === "number" ? opts["limit"] : DEFAULT_LIMIT;
+  if (typeof opts["limit"] === "number") q.limit = opts["limit"];
   if (typeof opts["offset"] === "number") q.offset = opts["offset"];
   if (typeof opts["orderBy"] === "string") q.orderBy = opts["orderBy"];
   if (typeof opts["fields"] === "string") q.outFields = opts["fields"];
@@ -78,7 +75,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .option("--where <sql>", "SQL filter, e.g. \"Ort='Berlin' AND Typ='Schnellladeeinrichtung'\"", parseNonEmpty)
     .option(
       "--limit <n>",
-      "max rows per request (1..10000, default 50; the server returns at most ~2000 — page with --offset)",
+      `max rows per request (1..${MAX_LIMIT}, default ${DEFAULT_LIMIT}; the server returns at most ~2000 — page with --offset)`,
       parseBoundedInt(1, MAX_LIMIT),
     )
     .option("--offset <n>", "rows to skip (for paging)", parseIntArg)
@@ -121,13 +118,13 @@ export function registerCommands(program: Command, deps: CliDeps): void {
           const c = collection as { properties?: { exceededTransferLimit?: unknown }; features?: unknown };
           if (c.properties?.exceededTransferLimit === true) {
             const rows = Array.isArray(c.features) ? c.features.length : 0;
-            deps.io.err(truncationNote(rows, q.limit ?? Number.POSITIVE_INFINITY));
+            deps.io.err(truncationNote(rows, q.limit ?? DEFAULT_LIMIT));
           }
           renderJson(deps, global, collection);
         } else {
           const page = await client.stations(q);
           if (page.exceededTransferLimit) {
-            deps.io.err(truncationNote(page.features.length, q.limit ?? Number.POSITIVE_INFINITY));
+            deps.io.err(truncationNote(page.features.length, q.limit ?? DEFAULT_LIMIT));
           }
           renderJson(deps, global, page);
         }

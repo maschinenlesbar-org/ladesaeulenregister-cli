@@ -81,6 +81,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   problem)`, which throws `LadesaeulenValidationError` (`Invalid <name>: <reason>`).
   A rejected input sends no request; `run.ts` maps the error to exit 2
   (`Error: <message>`).
+- **The library owns the request defaults.** `stations()`/`geojson()` send `where=1=1`,
+  `outFields=DEFAULT_FIELDS` and `resultRecordCount=DEFAULT_LIMIT` (50) when the query
+  leaves them out; without a page size the server would send its cap of about 2000
+  rows. `count()` sends no page size. The CLI passes `--limit` only when given and
+  reads `DEFAULT_LIMIT` for its help text and truncation note.
 - **Long queries go as a POST.** ArcGIS Online answers a GET URL of about 2.9 KB with a
   misleading HTTP 404 (and above about 20 KB with 414). `/query` takes the same parameters
   as an `application/x-www-form-urlencoded` POST body, so the engine switches to a POST to

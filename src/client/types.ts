@@ -113,7 +113,10 @@ export interface StationQuery {
   where?: string;
   /** Comma-separated field list, or `*`. Defaults to a curated set. */
   outFields?: string;
-  /** Max rows to return (ArcGIS `resultRecordCount`). */
+  /**
+   * Max rows to return (ArcGIS `resultRecordCount`), 1..`MAX_LIMIT`. `stations` and
+   * `geojson` default to `DEFAULT_LIMIT` (50); the server sends at most ~2000.
+   */
   limit?: number;
   /** Rows to skip (ArcGIS `resultOffset`). */
   offset?: number;

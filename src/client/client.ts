@@ -138,6 +138,12 @@ export const MAX_RADIUS_KM = 1000;
 /** Largest page `stations`/`geojson` ask for (ArcGIS `resultRecordCount`); the server sends at most ~2000. */
 export const MAX_LIMIT = 10_000;
 
+/**
+ * Page size `stations`/`geojson` ask for when the query sets no `limit`. Without
+ * one, the server would send its own cap of about 2000 rows. `count` sends none.
+ */
+export const DEFAULT_LIMIT = 50;
+
 /** A value as it appears in a validation message: strings quoted, the rest as is. */
 function show(value: unknown): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
@@ -251,10 +257,10 @@ export class LadesaeulenClient {
     return p;
   }
 
-  /** A page of charging stations (ArcGIS `f=json`). */
+  /** A page of charging stations (ArcGIS `f=json`); `limit` defaults to `DEFAULT_LIMIT`. */
   async stations(q: StationQuery = {}): Promise<StationPage> {
     const params = this.buildParams(
-      { ...q, outFields: q.outFields ?? DEFAULT_FIELDS },
+      { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
       { f: "json", returnGeometry: false },
     );
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
@@ -278,9 +284,12 @@ export class LadesaeulenClient {
     return count;
   }
 
-  /** The matching stations as a GeoJSON FeatureCollection (`f=geojson`). */
+  /** The matching stations as a GeoJSON FeatureCollection (`f=geojson`); `limit` defaults to `DEFAULT_LIMIT`. */
   async geojson(q: StationQuery = {}): Promise<unknown> {
-    const params = this.buildParams({ ...q, outFields: q.outFields ?? DEFAULT_FIELDS }, { f: "geojson" });
+    const params = this.buildParams(
+      { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
+      { f: "geojson" },
+    );
     return this.get<{ error?: { code?: number; message?: string; details?: string[] } }>(
       `${LAYER}/query`,
       params,
