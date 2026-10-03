@@ -5,6 +5,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
 import { MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "../client/client.js";
+import { headerValueProblem } from "../client/validate.js";
 
 /**
  * commander value-parser: a plain base-10 non-negative integer.
@@ -104,24 +105,14 @@ export function parseLatLon(value: string): { lat: number; lon: number } {
 }
 
 /**
- * commander value-parser for a value that ends up in an HTTP header (User-Agent).
- * Rejects a blank value and anything Node's HTTP layer would refuse with an opaque
- * `ERR_INVALID_CHAR` ("Unexpected error"): control characters (a CR/LF or other
- * C0/DEL byte) and code units above U+00FF. Tab (0x09) and Latin-1 (ü) are
- * allowed — exactly what Node's header validation accepts. Checked by char code
- * so the source stays free of control bytes.
+ * commander value-parser for a value that ends up in an HTTP header (User-Agent):
+ * the library's `headerValueProblem` (not blank, Latin-1 without control
+ * characters; tab is fine), whose reason becomes the usage error. The engine runs
+ * the same rule on `userAgent`.
  */
 export function parseHeaderValue(value: string): string {
-  parseNonEmpty(value);
-  for (let i = 0; i < value.length; i++) {
-    const c = value.charCodeAt(i);
-    if ((c < 0x20 && c !== 0x09) || c === 0x7f) {
-      throw new InvalidArgumentError("Value contains control characters.");
-    }
-    if (c > 0xff) {
-      throw new InvalidArgumentError("Value contains characters outside Latin-1 (above U+00FF).");
-    }
-  }
+  const reason = headerValueProblem(value);
+  if (reason !== undefined) throw new InvalidArgumentError(reason);
   return value;
 }
 

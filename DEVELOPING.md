@@ -84,6 +84,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   (`intRangeProblem`); a negative, NaN, infinite or fractional value throws instead
   of silently switching off the timeout or the size cap. The CLI's parsers read the
   same constants.
+  It also checks the header values: `userAgent` and every `defaultHeaders` value
+  must be non-blank Latin-1 without control characters (tab is fine), and every
+  `defaultHeaders` name an HTTP token (`headerValueProblem`/`headerNameProblem`,
+  `assertHeaderValue`). `--user-agent` runs the same rule. The default transport
+  turns Node's own synchronous header error into a `LadesaeulenNetworkError`.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,

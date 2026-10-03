@@ -41,6 +41,31 @@ export function intRangeProblem(min: number, max: number): Problem<number> {
 }
 
 /**
+ * A rule for a value that goes into an HTTP header (User-Agent, `defaultHeaders`):
+ * not blank, no control characters (a CR/LF or other C0 byte, DEL; tab is fine)
+ * and no code units above U+00FF. That is what Node's HTTP layer accepts; anything
+ * else it refuses with an opaque `ERR_INVALID_CHAR`, and a CR/LF handed to a custom
+ * transport could inject a header. Checked by char code so the source stays free
+ * of control bytes.
+ */
+export const headerValueProblem: Problem<string> = (value) => {
+  if (typeof value !== "string") return `Expected a string, got ${show(value)}.`;
+  if (value.trim() === "") return "Expected a non-empty value.";
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if ((c < 0x20 && c !== 0x09) || c === 0x7f) return "Value contains control characters.";
+    if (c > 0xff) return "Value contains characters outside Latin-1 (above U+00FF).";
+  }
+  return undefined;
+};
+
+/** A rule for an HTTP header name: an RFC 9110 token (`X-Trace-Id`). */
+export const headerNameProblem: Problem<string> = (name) =>
+  typeof name === "string" && /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)
+    ? undefined
+    : `Expected an HTTP header name (a token), got ${show(name)}.`;
+
+/**
  * The `StationQuery` keys that shape a page of rows (paging, sort, field
  * selection). ArcGIS ignores them next to `returnCountOnly`, so `count()` refuses
  * them rather than return the full total to a caller who expects a per-page count.

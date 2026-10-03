@@ -7,9 +7,16 @@ import assert from "node:assert/strict";
 import { LadesaeulenClient, DEFAULT_LIMIT } from "../src/client/client.js";
 import * as lib from "../src/index.js";
 import { LadesaeulenValidationError } from "../src/client/errors.js";
-import { countIgnoredOptions, countQueryProblem, intRangeProblem } from "../src/client/validate.js";
-import { MAX_RETRIES, RequestEngine } from "../src/client/engine.js";
-import { MAX_TIMEOUT_MS } from "../src/client/http.js";
+import {
+  countIgnoredOptions,
+  countQueryProblem,
+  headerNameProblem,
+  headerValueProblem,
+  intRangeProblem,
+} from "../src/client/validate.js";
+import { assertHeaderValue, MAX_RETRIES, RequestEngine } from "../src/client/engine.js";
+import { MAX_TIMEOUT_MS, nodeHttpTransport } from "../src/client/http.js";
+import { LadesaeulenNetworkError } from "../src/client/errors.js";
 import { jsonResponse, parity, queryOf, requestShapes } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -197,4 +204,79 @@ test("MAX_RETRIES is 10 and exported from the package root", () => {
   assert.equal(MAX_RETRIES, 10);
   assert.equal(lib.MAX_RETRIES, MAX_RETRIES);
   assert.equal(lib.intRangeProblem, intRangeProblem);
+});
+
+// ---- #4 (PAT-5): header values are checked by the library ----
+
+test("headerValueProblem rejects blank, control and non-Latin-1 values; tab and Latin-1 pass", () => {
+  assert.equal(headerValueProblem("Grüße\tbot/1"), undefined);
+  assert.equal(headerValueProblem("ladesaeulen/1.0"), undefined);
+  assert.equal(headerValueProblem(""), "Expected a non-empty value.");
+  assert.equal(headerValueProblem("   "), "Expected a non-empty value.");
+  assert.equal(headerValueProblem("a\r\nX-Injected: 1"), "Value contains control characters.");
+  assert.equal(headerValueProblem("a\u0000b"), "Value contains control characters.");
+  assert.equal(headerValueProblem("a\u007fb"), "Value contains control characters.");
+  assert.equal(headerValueProblem("日本"), "Value contains characters outside Latin-1 (above U+00FF).");
+  assert.equal(headerValueProblem(42 as unknown as string), "Expected a string, got 42.");
+});
+
+test("headerNameProblem accepts an HTTP token and rejects anything else", () => {
+  assert.equal(headerNameProblem("X-Trace-Id"), undefined);
+  assert.equal(headerNameProblem(""), "Expected an HTTP header name (a token), got \"\".");
+  assert.equal(headerNameProblem("X Bad"), "Expected an HTTP header name (a token), got \"X Bad\".");
+  assert.equal(headerNameProblem("X\r\nY"), "Expected an HTTP header name (a token), got \"X\\r\\nY\".");
+});
+
+test("assertHeaderValue returns a good value and throws LadesaeulenValidationError for a bad one", () => {
+  assert.equal(assertHeaderValue("userAgent", "bot/1"), "bot/1");
+  assert.throws(
+    () => assertHeaderValue("userAgent", ""),
+    (err: unknown) =>
+      err instanceof LadesaeulenValidationError && (err as Error).message === "Invalid userAgent: Expected a non-empty value.",
+  );
+});
+
+test("parity: a bad --user-agent is rejected by both, no request; a tab and Latin-1 pass on both", async () => {
+  for (const ua of ["", "   ", "a\r\nX-Injected: 1", "日本", "a\u007fb"]) {
+    const { cli, lib: res } = await parity(
+      ["--compact", "--user-agent", ua, "stations", "--count"],
+      (transport) => new LadesaeulenClient({ userAgent: ua, transport }).count(),
+      () => jsonResponse({ count: 42 }),
+    );
+    assert.equal(cli.code, 2, JSON.stringify(ua));
+    assert.equal(cli.requests.length, 0);
+    assert.equal(res.ok, false, JSON.stringify(ua));
+    assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError, JSON.stringify(ua));
+    assert.equal(res.requests.length, 0);
+  }
+  const { cli, lib: res } = await parity(
+    ["--compact", "--user-agent", "Grüße\tbot/1", "stations", "--count"],
+    (transport) => new LadesaeulenClient({ userAgent: "Grüße\tbot/1", transport }).count(),
+    () => jsonResponse({ count: 42 }),
+  );
+  assert.equal(cli.code, 0);
+  assert.ok(res.ok);
+  assert.deepEqual(requestShapes(res.requests), requestShapes(cli.requests));
+});
+
+test("the engine checks every defaultHeaders name and value", () => {
+  const bad: Record<string, string>[] = [{ "X-A": "" }, { "X-A": "a\r\nb" }, { "X A": "v" }, { "X-A": "€" }];
+  for (const headers of bad) {
+    assert.throws(() => new RequestEngine({ defaultHeaders: headers }), LadesaeulenValidationError, JSON.stringify(headers));
+  }
+  new RequestEngine({ defaultHeaders: { "X-Trace-Id": "abc\t1" } });
+});
+
+test("nodeHttpTransport rejects a header Node refuses with LadesaeulenNetworkError, not a raw TypeError", async () => {
+  await assert.rejects(
+    () =>
+      nodeHttpTransport({ method: "GET", url: "http://127.0.0.1:9/x", headers: { "User-Agent": "a\r\nb" } }),
+    (err: unknown) => err instanceof LadesaeulenNetworkError && (err as Error).cause instanceof TypeError,
+  );
+});
+
+test("the header checks are exported from the package root", () => {
+  assert.equal(lib.assertHeaderValue, assertHeaderValue);
+  assert.equal(lib.headerValueProblem, headerValueProblem);
+  assert.equal(lib.headerNameProblem, headerNameProblem);
 });

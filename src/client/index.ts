@@ -4,6 +4,7 @@ export { LadesaeulenClient, DEFAULT_FIELDS, DEFAULT_LIMIT, MAX_LIMIT, MIN_RADIUS
 export type { LadesaeulenClientOptions } from "./client.js";
 export {
   RequestEngine,
+  assertHeaderValue,
   DEFAULT_BASE_URL,
   MAX_GET_URL_LENGTH,
   MAX_RETRIES,
@@ -20,6 +21,8 @@ export {
   COUNT_IGNORED_KEYS,
   countIgnoredOptions,
   countQueryProblem,
+  headerNameProblem,
+  headerValueProblem,
   intRangeProblem,
 } from "./validate.js";
 export type { Problem } from "./validate.js";
