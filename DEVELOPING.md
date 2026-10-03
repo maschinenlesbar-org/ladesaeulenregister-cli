@@ -78,6 +78,12 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `limit`, `offset`, `orderBy` or `outFields` (`countQueryProblem`, `Invalid count
   query: …`): ArcGIS ignores them next to `returnCountOnly` and returns the full
   total. The CLI's `--count` rewords that error with the flag names.
+  The `RequestEngine` constructor (so `new LadesaeulenClient()` too) range-checks its
+  numeric options the same way: `timeoutMs` 0..`MAX_TIMEOUT_MS`, `maxRetries`
+  0..`MAX_RETRIES` (10), `retryDelayMs` and `maxResponseBytes` non-negative integers
+  (`intRangeProblem`); a negative, NaN, infinite or fractional value throws instead
+  of silently switching off the timeout or the size cap. The CLI's parsers read the
+  same constants.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,

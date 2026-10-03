@@ -7,7 +7,9 @@ import assert from "node:assert/strict";
 import { LadesaeulenClient, DEFAULT_LIMIT } from "../src/client/client.js";
 import * as lib from "../src/index.js";
 import { LadesaeulenValidationError } from "../src/client/errors.js";
-import { countIgnoredOptions, countQueryProblem } from "../src/client/validate.js";
+import { countIgnoredOptions, countQueryProblem, intRangeProblem } from "../src/client/validate.js";
+import { MAX_RETRIES, RequestEngine } from "../src/client/engine.js";
+import { MAX_TIMEOUT_MS } from "../src/client/http.js";
 import { jsonResponse, parity, queryOf, requestShapes } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -117,4 +119,82 @@ test("parity: stations --count with --where and --near sends the same request as
   assert.equal(cli.out, "116343");
   assert.ok(res.ok);
   assert.deepEqual(requestShapes(res.requests), requestShapes(cli.requests));
+});
+
+// ---- #2 (PAT-8): the engine range-checks its numeric options ----
+
+test("intRangeProblem accepts integers in range and explains anything else", () => {
+  const p = intRangeProblem(0, 10);
+  for (const ok of [0, 5, 10]) assert.equal(p(ok), undefined, String(ok));
+  assert.equal(p(-1), "expected an integer from 0 to 10, got -1.");
+  assert.equal(p(11), "expected an integer from 0 to 10, got 11.");
+  assert.equal(p(1.5), "expected an integer from 0 to 10, got 1.5.");
+  assert.equal(p(Number.NaN), "expected an integer from 0 to 10, got NaN.");
+  assert.equal(p(Number.POSITIVE_INFINITY), "expected an integer from 0 to 10, got Infinity.");
+  assert.equal(p("3" as unknown as number), 'expected an integer from 0 to 10, got "3".');
+});
+
+test("parity: out-of-range --timeout, --max-retries, --max-response-bytes are rejected by both, no request", async () => {
+  const cases: [string[], Record<string, number>][] = [
+    [["--timeout", "-1"], { timeoutMs: -1 }],
+    [["--timeout", String(MAX_TIMEOUT_MS + 1)], { timeoutMs: MAX_TIMEOUT_MS + 1 }],
+    [["--max-retries", "11"], { maxRetries: 11 }],
+    [["--max-retries", "1.5"], { maxRetries: 1.5 }],
+    [["--max-response-bytes", "-1"], { maxResponseBytes: -1 }],
+  ];
+  for (const [flag, opts] of cases) {
+    const { cli, lib: res } = await parity(
+      ["--compact", ...flag, "stations", "--count"],
+      (transport) => new LadesaeulenClient({ ...opts, transport }).count(),
+      () => jsonResponse({ count: 660 }),
+    );
+    assert.equal(cli.code, 2, flag.join(" "));
+    assert.equal(cli.requests.length, 0);
+    assert.equal(res.ok, false, flag.join(" "));
+    assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError, flag.join(" "));
+    assert.equal(res.requests.length, 0);
+  }
+});
+
+test("the engine rejects NaN, Infinity, fractional and negative numeric options with a validation error", () => {
+  const bad: [string, number][] = [
+    ["timeoutMs", Number.NaN],
+    ["timeoutMs", 1.5],
+    ["timeoutMs", 2 ** 31],
+    ["maxRetries", Number.POSITIVE_INFINITY],
+    ["maxRetries", Number.NaN],
+    ["maxRetries", MAX_RETRIES + 1],
+    ["retryDelayMs", -1],
+    ["retryDelayMs", Number.NaN],
+    ["maxResponseBytes", Number.NaN],
+    ["maxResponseBytes", 0.5],
+  ];
+  for (const [name, value] of bad) {
+    assert.throws(
+      () => new RequestEngine({ [name]: value }),
+      (err: unknown) =>
+        err instanceof LadesaeulenValidationError && (err as Error).message.startsWith(`Invalid ${name}: expected an integer`),
+      `${name}=${value}`,
+    );
+  }
+  assert.equal(
+    (() => {
+      try {
+        new RequestEngine({ timeoutMs: -1 });
+      } catch (e) {
+        return (e as Error).message;
+      }
+      return "";
+    })(),
+    `Invalid timeoutMs: expected an integer from 0 to ${MAX_TIMEOUT_MS}, got -1.`,
+  );
+  // 0 keeps its documented meaning and the maxima are accepted.
+  new RequestEngine({ timeoutMs: 0, maxRetries: 0, retryDelayMs: 0, maxResponseBytes: 0 });
+  new RequestEngine({ timeoutMs: MAX_TIMEOUT_MS, maxRetries: MAX_RETRIES, maxResponseBytes: Number.MAX_SAFE_INTEGER });
+});
+
+test("MAX_RETRIES is 10 and exported from the package root", () => {
+  assert.equal(MAX_RETRIES, 10);
+  assert.equal(lib.MAX_RETRIES, MAX_RETRIES);
+  assert.equal(lib.intRangeProblem, intRangeProblem);
 });

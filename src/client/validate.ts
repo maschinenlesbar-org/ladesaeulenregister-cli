@@ -23,6 +23,23 @@ export function assertValid<T>(name: string, value: T, problem: Problem<T>): T {
   return value;
 }
 
+/** A value as it appears in a validation message: strings quoted, the rest as is. */
+function show(value: unknown): string {
+  return typeof value === "string" ? JSON.stringify(value) : String(value);
+}
+
+/**
+ * A rule for an integer option: a safe integer from `min` to `max`. Anything else
+ * (a negative, NaN, Infinity, a fraction, a non-number) gets the reason
+ * `expected an integer from <min> to <max>, got <value>.`
+ */
+export function intRangeProblem(min: number, max: number): Problem<number> {
+  return (value) =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max
+      ? undefined
+      : `expected an integer from ${min} to ${max}, got ${show(value)}.`;
+}
+
 /**
  * The `StationQuery` keys that shape a page of rows (paging, sort, field
  * selection). ArcGIS ignores them next to `returnCountOnly`, so `count()` refuses
