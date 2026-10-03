@@ -11,6 +11,7 @@ export {
   MAX_RETRY_AFTER_MS,
   parseRetryAfter,
   describeArcGisError,
+  validateBaseUrl,
 } from "./engine.js";
 export type { EngineOptions, RawResponse, RequestTarget } from "./engine.js";
 export { MAX_TIMEOUT_MS, nodeHttpTransport } from "./http.js";
@@ -18,6 +19,7 @@ export type { Transport, HttpRequest, HttpResponse } from "./http.js";
 export { buildQueryString } from "./query.js";
 export {
   assertValid,
+  baseUrlProblem,
   COUNT_IGNORED_KEYS,
   countIgnoredOptions,
   countQueryProblem,

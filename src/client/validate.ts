@@ -66,6 +66,16 @@ export const headerNameProblem: Problem<string> = (name) =>
     : `Expected an HTTP header name (a token), got ${show(name)}.`;
 
 /**
+ * A rule for a configured base URL. Request paths are appended to the raw string,
+ * so surrounding whitespace would end up in every request URL (`/fs%20/0/query`),
+ * while `new URL()` trims it silently: refuse it rather than guess.
+ */
+export const baseUrlProblem: Problem<string> = (raw) => {
+  if (typeof raw === "string" && raw !== raw.trim()) return "A base URL cannot have surrounding whitespace.";
+  return undefined;
+};
+
+/**
  * The `StationQuery` keys that shape a page of rows (paging, sort, field
  * selection). ArcGIS ignores them next to `returnCountOnly`, so `count()` refuses
  * them rather than return the full total to a caller who expects a per-page count.

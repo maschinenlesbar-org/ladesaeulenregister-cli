@@ -8,13 +8,14 @@ import { LadesaeulenClient, DEFAULT_LIMIT } from "../src/client/client.js";
 import * as lib from "../src/index.js";
 import { LadesaeulenValidationError } from "../src/client/errors.js";
 import {
+  baseUrlProblem,
   countIgnoredOptions,
   countQueryProblem,
   headerNameProblem,
   headerValueProblem,
   intRangeProblem,
 } from "../src/client/validate.js";
-import { assertHeaderValue, MAX_RETRIES, RequestEngine } from "../src/client/engine.js";
+import { assertHeaderValue, MAX_RETRIES, RequestEngine, validateBaseUrl } from "../src/client/engine.js";
 import { MAX_TIMEOUT_MS, nodeHttpTransport } from "../src/client/http.js";
 import { LadesaeulenNetworkError } from "../src/client/errors.js";
 import { jsonResponse, parity, queryOf, requestShapes } from "./helpers.js";
@@ -279,4 +280,47 @@ test("the header checks are exported from the package root", () => {
   assert.equal(lib.assertHeaderValue, assertHeaderValue);
   assert.equal(lib.headerValueProblem, headerValueProblem);
   assert.equal(lib.headerNameProblem, headerNameProblem);
+});
+
+// ---- #5 (PAT-1): a base URL with surrounding whitespace ----
+
+test("baseUrlProblem rejects surrounding whitespace", () => {
+  assert.equal(baseUrlProblem("https://h.example/fs"), undefined);
+  for (const raw of ["https://h.example/fs ", "https://h.example/fs/ ", " https://h.example/fs", "https://h.example/fs\n"]) {
+    assert.equal(baseUrlProblem(raw), "A base URL cannot have surrounding whitespace.", JSON.stringify(raw));
+  }
+});
+
+test("validateBaseUrl checks the raw value and returns it without trailing slashes", () => {
+  assert.equal(validateBaseUrl("https://h.example/fs///"), "https://h.example/fs");
+  assert.throws(
+    () => validateBaseUrl("https://h.example/fs/ "),
+    (err: unknown) =>
+      err instanceof LadesaeulenValidationError &&
+      (err as Error).message === "Invalid baseUrl: A base URL cannot have surrounding whitespace.",
+  );
+});
+
+test("parity: a base URL with surrounding whitespace is rejected by both, no request", async () => {
+  for (const baseUrl of ["https://h.example/fs ", "https://h.example/fs/ ", " https://h.example/fs"]) {
+    const { cli, lib: res } = await parity(
+      ["--compact", "--base-url", baseUrl, "stations", "--count"],
+      (transport) => new LadesaeulenClient({ baseUrl, transport }).count(),
+      () => jsonResponse({ count: 42 }),
+    );
+    assert.equal(cli.code, 2, JSON.stringify(baseUrl));
+    assert.equal(cli.requests.length, 0);
+    assert.match(cli.err, /A base URL cannot have surrounding whitespace\./);
+    assert.equal(res.ok, false, JSON.stringify(baseUrl));
+    assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError);
+    assert.equal(res.requests.length, 0);
+  }
+  const { cli, lib: res } = await parity(
+    ["--compact", "--base-url", "https://h.example/fs/", "stations", "--count"],
+    (transport) => new LadesaeulenClient({ baseUrl: "https://h.example/fs/", transport }).count(),
+    () => jsonResponse({ count: 42 }),
+  );
+  assert.equal(cli.code, 0);
+  assert.ok(res.ok);
+  assert.deepEqual(requestShapes(res.requests), requestShapes(cli.requests));
 });

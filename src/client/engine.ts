@@ -5,7 +5,7 @@
 // too long for a URL, in a form-encoded POST body (ArcGIS `/query` accepts both).
 
 import { MAX_TIMEOUT_MS, nodeHttpTransport, type Transport } from "./http.js";
-import { assertValid, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
+import { assertValid, baseUrlProblem, headerNameProblem, headerValueProblem, intRangeProblem } from "./validate.js";
 import { buildQueryString, type QueryParams } from "./query.js";
 import { LadesaeulenApiError, LadesaeulenNetworkError, LadesaeulenParseError } from "./errors.js";
 
@@ -20,7 +20,11 @@ export interface RawResponse {
 }
 
 export interface EngineOptions {
-  /** Base URL of the API. Defaults to the public Ladesäulen ArcGIS FeatureServer. */
+  /**
+   * Base URL of the API. Defaults to the public Ladesäulen ArcGIS FeatureServer.
+   * Checked by `validateBaseUrl`: no surrounding whitespace, http(s) only, no query
+   * or fragment.
+   */
   baseUrl?: string;
   /** Swappable transport. Defaults to the built-in node http/https transport. */
   transport?: Transport;
@@ -177,6 +181,20 @@ export function describeArcGisError(error: unknown): string | undefined {
 }
 
 /**
+ * Check a configured base URL and return it with trailing slashes stripped. Runs
+ * on the raw value, before the slash strip: surrounding whitespace is a
+ * LadesaeulenValidationError (`baseUrlProblem`), since `new URL()` trims it but
+ * the engine appends request paths to the raw string, so `"https://h/fs "` would
+ * request `/fs%20/0/query` and `"https://h/fs/ "` would slip past the slash strip.
+ * Then the scheme, query and fragment checks of `assertHttpScheme` apply.
+ */
+export function validateBaseUrl(raw: string): string {
+  assertValid("baseUrl", raw, baseUrlProblem);
+  assertHttpScheme(raw);
+  return raw.replace(/\/+$/, "");
+}
+
+/**
  * Reject a base URL whose scheme is not http(s), or that has a query or fragment.
  * The default transport already gates the scheme per hop, but the engine is
  * exported as a library and may be handed a custom transport that does no such
@@ -236,8 +254,8 @@ export class RequestEngine {
   private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(options: EngineOptions = {}) {
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-    assertHttpScheme(this.baseUrl);
+    // Checked raw, before the trailing-slash strip (see validateBaseUrl).
+    this.baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.transport = options.transport ?? nodeHttpTransport;
     // Header values are checked up front: a blank one would be sent as is, and a
     // CR/LF or a character above U+00FF would reach a custom transport raw or make

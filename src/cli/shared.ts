@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
 import { MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "../client/client.js";
-import { headerValueProblem } from "../client/validate.js";
+import { baseUrlProblem, headerValueProblem } from "../client/validate.js";
 
 /**
  * commander value-parser: a plain base-10 non-negative integer.
@@ -60,10 +60,9 @@ export function parseBaseUrl(value: string): string {
     throw new InvalidArgumentError("A base URL cannot have a query (?) or fragment (#).");
   }
   // The check above parsed the trimmed value, but the raw value is what the engine
-  // uses, so reject surrounding whitespace rather than guess.
-  if (value !== value.trim()) {
-    throw new InvalidArgumentError("A base URL cannot have surrounding whitespace.");
-  }
+  // uses: the library's baseUrlProblem refuses surrounding whitespace.
+  const reason = baseUrlProblem(value);
+  if (reason !== undefined) throw new InvalidArgumentError(reason);
   return value;
 }
 
