@@ -13,6 +13,7 @@
 import { RequestEngine, describeArcGisError, type EngineOptions } from "./engine.js";
 import { LadesaeulenApiError, LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
 import type { QueryParams } from "./query.js";
+import { assertValid, countQueryProblem } from "./validate.js";
 import type {
   ArcGisQueryResponse,
   CountByPage,
@@ -270,10 +271,15 @@ export class LadesaeulenClient {
     };
   }
 
-  /** The number of stations matching the query (`returnCountOnly`). */
+  /**
+   * The number of stations matching the query (`returnCountOnly`): every match of
+   * `where` and `near`. A `limit`, `offset`, `orderBy` or `outFields` is a
+   * `LadesaeulenValidationError` (`countQueryProblem`), since ArcGIS ignores them
+   * on a count and would return the full total, not a per-page count.
+   */
   async count(q: StationQuery = {}): Promise<number> {
+    assertValid("count query", q, countQueryProblem);
     const params = this.buildParams(q, { f: "json", returnCountOnly: true });
-    delete params["outFields"];
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
     // 0 is a plausible real answer, so a reply without a usable count must not
     // become one (a proxy's `{}`, a non-ArcGIS endpoint, a string count).

@@ -14,7 +14,7 @@ export type { EngineOptions, RawResponse, RequestTarget } from "./engine.js";
 export { MAX_TIMEOUT_MS, nodeHttpTransport } from "./http.js";
 export type { Transport, HttpRequest, HttpResponse } from "./http.js";
 export { buildQueryString } from "./query.js";
-export { assertValid } from "./validate.js";
+export { assertValid, COUNT_IGNORED_KEYS, countIgnoredOptions, countQueryProblem } from "./validate.js";
 export type { Problem } from "./validate.js";
 export type { QueryParams, QueryValue } from "./query.js";
 export {

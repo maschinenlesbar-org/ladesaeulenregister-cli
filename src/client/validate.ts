@@ -5,6 +5,7 @@
 // error, so a rule is written once and the CLI and the library cannot drift apart.
 
 import { LadesaeulenValidationError } from "./errors.js";
+import type { StationQuery } from "./types.js";
 
 /** A rule: the reason `value` is invalid, or `undefined` when it is valid. */
 export type Problem<T = unknown> = (value: T) => string | undefined;
@@ -21,3 +22,25 @@ export function assertValid<T>(name: string, value: T, problem: Problem<T>): T {
   if (reason !== undefined) throw new LadesaeulenValidationError(`Invalid ${name}: ${reason}`);
   return value;
 }
+
+/**
+ * The `StationQuery` keys that shape a page of rows (paging, sort, field
+ * selection). ArcGIS ignores them next to `returnCountOnly`, so `count()` refuses
+ * them rather than return the full total to a caller who expects a per-page count.
+ */
+export const COUNT_IGNORED_KEYS = ["limit", "offset", "orderBy", "outFields"] as const;
+
+/** The keys of `q` that `count()` refuses (set and not `undefined`), in `COUNT_IGNORED_KEYS` order. */
+export function countIgnoredOptions(q: StationQuery): (typeof COUNT_IGNORED_KEYS)[number][] {
+  return COUNT_IGNORED_KEYS.filter((key) => q[key] !== undefined);
+}
+
+/** Why `q` cannot be counted: it sets a paging, sort or field option. */
+export const countQueryProblem: Problem<StationQuery> = (q) => {
+  const keys = countIgnoredOptions(q);
+  if (keys.length === 0) return undefined;
+  return (
+    `${keys.join(", ")} cannot be combined with count(): it counts every match, ` +
+    "so paging, sorting and field options do not apply."
+  );
+};

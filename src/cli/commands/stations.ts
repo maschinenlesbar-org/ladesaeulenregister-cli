@@ -7,8 +7,10 @@ import type { CliDeps } from "../io.js";
 import type { StationQuery } from "../../client/types.js";
 import { LadesaeulenValidationError } from "../../client/errors.js";
 import { DEFAULT_LIMIT, MAX_LIMIT } from "../../client/client.js";
+import { countIgnoredOptions, type COUNT_IGNORED_KEYS } from "../../client/validate.js";
 import {
   action,
+  type ActionContext,
   parseBoundedInt,
   parseIntArg,
   parseLatLon,
@@ -40,13 +42,32 @@ function truncationNote(rows: number, limit: number): string {
   );
 }
 
-/** Options that shape a page of rows and so mean nothing to `--count`. */
-const PAGE_OPTIONS: readonly [key: string, flag: string][] = [
-  ["limit", "--limit"],
-  ["offset", "--offset"],
-  ["orderBy", "--order-by"],
-  ["fields", "--fields"],
-];
+/** The CLI flag for each `StationQuery` key `count()` refuses, for flag-style wording. */
+const COUNT_KEY_FLAGS: Record<(typeof COUNT_IGNORED_KEYS)[number], string> = {
+  limit: "--limit",
+  offset: "--offset",
+  orderBy: "--order-by",
+  outFields: "--fields",
+};
+
+/**
+ * Count the stations. The library refuses paging, sort and field options on a
+ * count before any request; its error is reworded here with the flag names.
+ */
+async function countStations(client: ActionContext["client"], q: StationQuery): Promise<number> {
+  try {
+    return await client.count(q);
+  } catch (err) {
+    const keys = countIgnoredOptions(q);
+    if (err instanceof LadesaeulenValidationError && keys.length > 0) {
+      throw new LadesaeulenValidationError(
+        `--count cannot be combined with ${keys.map((key) => COUNT_KEY_FLAGS[key]).join(", ")}: ` +
+          "it counts every match, so paging, sorting and field options do not apply.",
+      );
+    }
+    throw err;
+  }
+}
 
 /** Build a StationQuery from this command's parsed options. */
 function buildStationQuery(opts: Record<string, unknown>): StationQuery {
@@ -94,15 +115,6 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         if (opts["count"] === true && opts["geojson"] === true) {
           throw new LadesaeulenValidationError("--count and --geojson cannot be combined.");
         }
-        if (opts["count"] === true) {
-          const given = PAGE_OPTIONS.filter(([key]) => opts[key] !== undefined).map(([, flag]) => flag);
-          if (given.length > 0) {
-            throw new LadesaeulenValidationError(
-              `--count cannot be combined with ${given.join(", ")}: it counts every match, ` +
-                "so paging, sorting and field options do not apply.",
-            );
-          }
-        }
         const q = buildStationQuery(opts);
         if (q.near && isOutsideGermany(q.near.lat, q.near.lon)) {
           deps.io.err(
@@ -111,7 +123,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
           );
         }
         if (opts["count"] === true) {
-          renderJson(deps, global, await client.count(q));
+          renderJson(deps, global, await countStations(client, q));
         } else if (opts["geojson"] === true) {
           const collection = await client.geojson(q);
           // ArcGIS puts the flag on the FeatureCollection's `properties`.

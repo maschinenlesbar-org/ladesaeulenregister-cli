@@ -74,7 +74,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
   non-blank `countBy` field → `LadesaeulenValidationError`
-  (`Invalid <name>: expected <what>, got <value>.`).
+  (`Invalid <name>: expected <what>, got <value>.`). `count()` also refuses a
+  `limit`, `offset`, `orderBy` or `outFields` (`countQueryProblem`, `Invalid count
+  query: …`): ArcGIS ignores them next to `returnCountOnly` and returns the full
+  total. The CLI's `--count` rewords that error with the flag names.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,
