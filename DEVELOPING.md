@@ -30,6 +30,7 @@ src/
     http.ts      # Transport interface + default node:http/https transport
     engine.ts    # URL building, GET (POST for long queries), retry/backoff, JSON decode, HTTP-error mapping
     errors.ts    # LadesaeulenError / …ApiError / …NetworkError / …ValidationError / …ParseError
+    validate.ts  # Problem type + assertValid(): the library's input rules, shared with the CLI
     client.ts    # LadesaeulenClient (stations / count / geojson / countBy / fields)
     index.ts
   cli/
@@ -74,6 +75,12 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
   non-blank `countBy` field → `LadesaeulenValidationError`
   (`Invalid <name>: expected <what>, got <value>.`).
+  The library owns these rules; the CLI calls the same functions and only turns
+  their error into a usage error. `validate.ts` holds the shared pieces: the
+  `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,
+  problem)`, which throws `LadesaeulenValidationError` (`Invalid <name>: <reason>`).
+  A rejected input sends no request; `run.ts` maps the error to exit 2
+  (`Error: <message>`).
 - **Long queries go as a POST.** ArcGIS Online answers a GET URL of about 2.9 KB with a
   misleading HTTP 404 (and above about 20 KB with 414). `/query` takes the same parameters
   as an `application/x-www-form-urlencoded` POST body, so the engine switches to a POST to
@@ -96,6 +103,9 @@ mapping (where/outFields/paging), `returnCountOnly`, the ArcGIS `error` envelope
 throwing, `countBy` (outStatistics group-by → `{value,count}`), and the `--near`
 geometry params. `cli.test.ts` covers the three commands, `--near`/`--radius`
 validation, and the hardening guards (control-char UA, empty base URL, bounded retries).
+Parity tests use `parity()` from `test/helpers.ts`: it runs one input through `run()`
+and through the matching library call on one recording mock transport, so a test
+asserts that both reject with no request sent, or both send the identical request.
 
 ## Conventions to keep
 
