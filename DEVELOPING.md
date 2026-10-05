@@ -31,12 +31,14 @@ src/
     engine.ts    # URL building, GET (POST for long queries), retry/backoff, JSON decode, HTTP-error mapping
     errors.ts    # LadesaeulenError / …ApiError / …NetworkError / …ValidationError / …ParseError
     validate.ts  # Problem type + assertValid(): the library's input rules, shared with the CLI
-    client.ts    # LadesaeulenClient (stations / count / geojson / countBy / fields)
+    power.ts     # per-charge-point power from the connector columns (max_charge_point_kw)
+    columns.ts   # EMPTY_FIELDS: the columns the register never fills
+    client.ts    # LadesaeulenClient (stations / count / geojson / countBy / fields / layerInfo)
     index.ts
   cli/
     io.ts        # injectable I/O (CliDeps / CliIO) — no env seam (no auth)
     shared.ts    # option parsers (incl. --near lat,lon), global->engine mapping, render
-    commands/stations.ts  # stations / count-by / fields
+    commands/stations.ts  # stations / count-by / info / fields
     program.ts   # assembles the commander program
     run.ts       # parses argv -> exit code (no process.exit; testable)
     index.ts     # #! bin shim
@@ -213,6 +215,15 @@ validation, and the hardening guards (control-char UA, empty base URL, bounded r
 Parity tests use `parity()` from `test/helpers.ts`: it runs one input through `run()`
 and through the matching library call on one recording mock transport, so a test
 asserts that both reject with no request sent, or both send the identical request.
+`power.test.ts` checks the per-charge-point power on real register rows.
+
+The conformance tests of the 2026-10-05 review's fix patterns are shared across the
+`*-cli` repos; only their adapter block at the top is this repo's:
+`conformance-p1-cli-redaction`, `-p2-library-redaction`, `-p4-p19-config-validation`
+(P19 skipped: no environment variable), `-p5-transport-contract` (`RESETS_RETRIED =
+false`), `-p6-retry-policy` (`ABOVE_CAP = "fail"`), `-p7-pipes-exit-codes` (runs the
+built bin), `-p8-p9-p13-responses-and-errors` and `-p10-strict-filters` (the filter-name
+cases empty: ArcGIS rejects an unknown column itself).
 
 ## Conventions to keep
 
