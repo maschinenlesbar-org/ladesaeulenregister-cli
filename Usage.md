@@ -39,7 +39,9 @@ true` means more matched than were returned (the server caps a page at ~2000 row
 The CLI prints a stderr note in that case, saying whether your `--limit` or the server's
 cap cut the page; page with `--offset`, raise `--limit` or narrow `--where`.
 `--geojson` gets the same note: there the server puts the flag in the FeatureCollection's
-`properties.exceededTransferLimit`.
+`properties.exceededTransferLimit`. A reply that is not a FeatureCollection with a
+`features` array (a gateway's `{}`, `features: null`) is an error (exit 1), not an empty
+map.
 
 ### `count-by <field>` — grouped counts
 

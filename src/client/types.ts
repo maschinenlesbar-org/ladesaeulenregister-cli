@@ -81,6 +81,24 @@ export interface ArcGisQueryResponse {
   [key: string]: unknown;
 }
 
+/**
+ * The GeoJSON reply of `geojson()` (ArcGIS `f=geojson`), checked by the client: a
+ * FeatureCollection with a `features` array of objects. ArcGIS puts
+ * `exceededTransferLimit` into the collection's `properties`.
+ */
+export interface GeoJsonFeatureCollection {
+  type: "FeatureCollection";
+  features: Array<{
+    type?: string;
+    id?: number | string;
+    geometry?: { type?: string; coordinates?: unknown } | null;
+    properties?: ChargingStation | null;
+    [key: string]: unknown;
+  }>;
+  properties?: { exceededTransferLimit?: boolean; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
 /** A page of stations — what the client returns from a feature query. */
 export interface StationPage {
   features: Feature[];

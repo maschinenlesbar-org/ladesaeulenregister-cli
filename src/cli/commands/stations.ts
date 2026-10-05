@@ -127,10 +127,8 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         } else if (opts["geojson"] === true) {
           const collection = await client.geojson(q);
           // ArcGIS puts the flag on the FeatureCollection's `properties`.
-          const c = collection as { properties?: { exceededTransferLimit?: unknown }; features?: unknown };
-          if (c.properties?.exceededTransferLimit === true) {
-            const rows = Array.isArray(c.features) ? c.features.length : 0;
-            deps.io.err(truncationNote(rows, q.limit ?? DEFAULT_LIMIT));
+          if (collection.properties?.exceededTransferLimit === true) {
+            deps.io.err(truncationNote(collection.features.length, q.limit ?? DEFAULT_LIMIT));
           }
           renderJson(deps, global, collection);
         } else {

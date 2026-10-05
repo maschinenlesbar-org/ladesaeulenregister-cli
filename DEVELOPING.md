@@ -154,6 +154,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **Bodies are decoded by their declared charset** (`decodeBody`, `TextDecoder`): UTF-8
   when the Content-Type names none, a leading BOM dropped, an unknown label a
   `LadesaeulenParseError`. A Latin-1 answer keeps its umlauts.
+- **Every 2xx reply is checked against its documented shape** before it reaches a
+  caller: `stations()`/`countBy()` need a `features` array of objects with `attributes`,
+  `count()` a non-negative integer `count`, `fields()` a `fields` array, and `geojson()`
+  a `FeatureCollection` with a `features` array of objects. `null`, `{}`, a string or
+  an HTML page is a `LadesaeulenParseError` (exit 1), never data or an empty map.
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).

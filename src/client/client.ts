@@ -20,6 +20,7 @@ import type {
   CountByRow,
   Feature,
   FieldInfo,
+  GeoJsonFeatureCollection,
   StationPage,
   StationQuery,
 } from "./types.js";
@@ -282,16 +283,33 @@ export class LadesaeulenClient {
     return count;
   }
 
-  /** The matching stations as a GeoJSON FeatureCollection (`f=geojson`); `limit` defaults to `DEFAULT_LIMIT`. */
-  async geojson(q: StationQuery = {}): Promise<unknown> {
+  /**
+   * The matching stations as a GeoJSON FeatureCollection (`f=geojson`); `limit` defaults
+   * to `DEFAULT_LIMIT`. The reply must be a FeatureCollection whose `features` is an
+   * array of JSON objects; anything else (a gateway's `{}`, `features: null`, a string)
+   * is a `LadesaeulenParseError`, never an empty map.
+   */
+  async geojson(q: StationQuery = {}): Promise<GeoJsonFeatureCollection> {
     const params = this.buildParams(
       { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
       { f: "geojson" },
     );
-    return this.get<{ error?: { code?: number; message?: string; details?: string[] } }>(
-      `${LAYER}/query`,
+    const path = `${LAYER}/query`;
+    const res = (await this.get<{ error?: { code?: number; message?: string; details?: string[] } }>(
+      path,
       params,
-    );
+    )) as Record<string, unknown>;
+    const type = res["type"];
+    if (type !== "FeatureCollection") {
+      const got = typeof type === "string" ? JSON.stringify(type) : kindOf(type);
+      throw shapeError(path, `a GeoJSON FeatureCollection, got type ${got}`);
+    }
+    const features: unknown = res["features"];
+    if (!Array.isArray(features)) throw shapeError(path, `a FeatureCollection with a features array, got ${kindOf(features)}`);
+    features.forEach((f: unknown, i) => {
+      if (!isObject(f)) throw shapeError(path, `every feature to be a JSON object, feature ${i} is ${kindOf(f)}`);
+    });
+    return res as unknown as GeoJsonFeatureCollection;
   }
 
   /**

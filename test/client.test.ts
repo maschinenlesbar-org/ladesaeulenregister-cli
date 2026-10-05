@@ -379,3 +379,21 @@ test("the base URL's password reaches no ArcGIS error, on GET or POST, through t
   assert.ok(!errs.join("\n").includes(pw), errs.join("\n"));
   assert.match(errs.join("\n"), /ArcGIS error 400 for GET http:\/\/\*\*\*@mirror\.example/);
 });
+
+test("geojson() rejects a reply that is not a FeatureCollection with a features array", async () => {
+  for (const body of [
+    { foo: 1 },
+    {},
+    { type: "FeatureCollection", features: "x" },
+    { type: "FeatureCollection", features: null },
+    { type: "FeatureCollection" },
+    { type: "FeatureCollection", features: [1] },
+    { type: "Feature", features: [] },
+    { features: [] },
+  ]) {
+    const { client } = clientFor(body);
+    await assert.rejects(client.geojson(), LadesaeulenParseError, JSON.stringify(body));
+  }
+  const { client } = clientFor({ type: "FeatureCollection", features: [] });
+  assert.deepEqual(await client.geojson(), { type: "FeatureCollection", features: [] });
+});

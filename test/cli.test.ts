@@ -369,3 +369,12 @@ test("an error a custom transport throws is a network error: exit 6, not 'Unexpe
   assert.match(cli.err.join("\n"), /^Error: GET .* failed: read ECONNRESET/);
   assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
 });
+
+test("--geojson exits 1 with a parse error for a reply that is not a FeatureCollection", async () => {
+  for (const body of [{ foo: 1 }, { type: "FeatureCollection", features: "x" }]) {
+    const cli = makeCli(() => jsonResponse(body));
+    assert.equal(await run(["--compact", "stations", "--geojson"], cli.deps), 1, JSON.stringify(body));
+    assert.deepEqual(cli.out, []);
+    assert.match(cli.err.join("\n"), /Unexpected response shape from \/0\/query: expected a/);
+  }
+});
