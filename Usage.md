@@ -13,7 +13,7 @@ ladesaeulen [global options] <command> [command options]
 | `--base-url <url>` | API base URL (the ArcGIS FeatureServer); `http:`/`https:` only, no query (`?`), fragment (`#`) or surrounding whitespace, and a `%` in a user name or password must be an escape (write a literal `%` as `%25`); anything else is a usage error (exit 2) before any request |
 | `--timeout <ms>` | time limit per request in ms, whole response included (default 30000 = 30 s; 0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value (not blank; Latin-1 text without control characters) |
-| `--max-retries <n>` | retries for transient 429/503 responses (0..10, default 2). Each retry waits the server's `Retry-After` (seconds or an HTTP-date), else 200 ms, 400 ms, …; a `Retry-After` above 30 s is not retried — the error is reported at once. Network errors (a reset or refused connection, a timeout) are not retried |
+| `--max-retries <n>` | retries for transient 429/503 responses (0..10, default 2). Each retry backs off 200 ms, 400 ms, …, or waits the server's `Retry-After` (seconds or an HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried — the error is reported at once and names the wait the server asked for. A status that persists ends the message with `(after N retries)`. Network errors (a reset or refused connection, a timeout) are not retried |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `-V, --version` / `-h, --help` | version / help |

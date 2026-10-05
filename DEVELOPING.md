@@ -66,10 +66,16 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `resultOffset` (paging), `orderByFields`, `f` (`json`|`geojson`), `returnCountOnly`,
   `outStatistics`+`groupByFieldsForStatistics` (used by `countBy`), and geometry
   params (`geometry`/`geometryType`/`inSR`/`distance`/`units`/`spatialRel`) for `--near`.
-- **Retries honour `Retry-After`.** A 429/503 is retried up to `maxRetries` times, each
-  after the response's `Retry-After` (delay-seconds or an IMF-fixdate, parsed strictly by
-  `parseRetryAfter`), else after `retryDelayMs * attempt`. A `Retry-After` above
-  `MAX_RETRY_AFTER_MS` (30 s) is not retried: the error surfaces at once. Network errors
+- **Retries honour `Retry-After`, but never burst.** A 429/503 is retried up to
+  `maxRetries` times, each after `retryDelayMs * attempt` (`retryDelayMs` 0..30 000,
+  default 200), or after the response's `Retry-After` (delay-seconds or an IMF-fixdate,
+  parsed strictly by `parseRetryAfter`) when that is longer: the header can lengthen a
+  wait, never shorten it, so `Retry-After: 0` or a past date doesn't turn the retries
+  into a burst. A `Retry-After` above `MAX_RETRY_AFTER_MS` (30 s) is not retried: the
+  `LadesaeulenApiError` surfaces at once, with `retryAfterMs` set and a message that
+  names the wait (`…; the server asked to retry after 3600 s, longer than the 30 s the
+  client waits; not retried — try again after that`). After spent retries the message
+  ends `(after N retries)` and `retries` holds the count. Network errors
   (a reset or refused connection, DNS, a timeout) are not retried; they surface at once
   as `LadesaeulenNetworkError` (exit 6).
 - **Every transport is held to the same contract** (`engine.ts`), so a custom one (a

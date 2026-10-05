@@ -208,13 +208,34 @@ test("a malformed Retry-After falls back to the linear backoff", async () => {
   }
 });
 
-test("a Retry-After beyond MAX_RETRY_AFTER_MS is not retried", async () => {
+test("a Retry-After beyond MAX_RETRY_AFTER_MS is not retried, and the error says so", async () => {
   for (const long of ["31", "99999999999", "Wed, 21 Oct 2099 07:28:00 GMT"]) {
     const { engine, mt, delays } = retryingEngine(long);
-    await assert.rejects(() => engine.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 429);
+    await assert.rejects(
+      () => engine.getJson("/x"),
+      (err) =>
+        err instanceof LadesaeulenApiError &&
+        err.status === 429 &&
+        err.retries === 0 &&
+        typeof err.retryAfterMs === "number" &&
+        /the server asked to retry after \d+ s, longer than the 30 s the client waits; not retried/.test(err.message),
+    );
     assert.equal(mt.calls.length, 1, long);
     assert.deepEqual(delays, [], long);
   }
+});
+
+test("a status that persists through the retries says how many ran", async () => {
+  const { engine } = retryingEngine(undefined);
+  await assert.rejects(
+    () => engine.getJson("/x"),
+    (err) => err instanceof LadesaeulenApiError && err.retries === 2 && / \(after 2 retries\)$/.test(err.message),
+  );
+});
+
+test("retryDelayMs is bounded like a Retry-After wait (0..30000)", () => {
+  assert.doesNotThrow(() => new RequestEngine({ retryDelayMs: 30_000 }));
+  assert.throws(() => new RequestEngine({ retryDelayMs: 30_001 }), LadesaeulenValidationError);
 });
 
 test("parseRetryAfter reads delay-seconds and IMF-fixdate HTTP-dates only", () => {

@@ -58,14 +58,16 @@ export interface EngineOptions {
   timeoutMs?: number;
   /**
    * Number of automatic retries for transient (429/503) responses, an integer
-   * 0..`MAX_RETRIES` (10); defaults to 2. Each waits the response's `Retry-After`
-   * (up to `MAX_RETRY_AFTER_MS`; a longer one is not retried), or else
-   * `retryDelayMs * attempt`.
+   * 0..`MAX_RETRIES` (10); defaults to 2. Each waits `retryDelayMs * attempt`, or the
+   * response's `Retry-After` when that is longer (up to `MAX_RETRY_AFTER_MS`; a longer
+   * one is not retried, and the LadesaeulenApiError says so). Network errors are not
+   * retried.
    */
   maxRetries?: number;
   /**
-   * Base backoff between retries in milliseconds (grows linearly), a non-negative
-   * integer; used without a Retry-After. Defaults to 200.
+   * Base backoff between retries in milliseconds (grows linearly), an integer
+   * 0..`MAX_RETRY_AFTER_MS` (30 000). Defaults to 200. It is also the floor under a
+   * `Retry-After`: the header can lengthen a wait, never shorten it.
    */
   retryDelayMs?: number;
   /**
@@ -319,7 +321,9 @@ export class RequestEngine {
     // maxRetries would keep retrying.
     this.timeoutMs = intOption("timeoutMs", options.timeoutMs, MAX_TIMEOUT_MS, 30_000);
     this.maxRetries = intOption("maxRetries", options.maxRetries, MAX_RETRIES, 2);
-    this.retryDelayMs = intOption("retryDelayMs", options.retryDelayMs, Number.MAX_SAFE_INTEGER, 200);
+    // Bounded like a Retry-After wait: a larger value overflowed Node's timer and fired
+    // after 1 ms, a burst rather than a backoff.
+    this.retryDelayMs = intOption("retryDelayMs", options.retryDelayMs, MAX_RETRY_AFTER_MS, 200);
     this.maxResponseBytes = intOption(
       "maxResponseBytes",
       options.maxResponseBytes,
@@ -501,20 +505,26 @@ export class RequestEngine {
       }
 
       const retryable = status === 429 || status === 503;
-      if (retryable && attempt < this.maxRetries) {
-        // Honour Retry-After; without a usable one, back off linearly. A Retry-After
-        // beyond MAX_RETRY_AFTER_MS is not retried: the error below surfaces at once.
-        const retryAfter = parseRetryAfter(responseHeaders["retry-after"]);
-        if (retryAfter === undefined || retryAfter <= MAX_RETRY_AFTER_MS) {
-          attempt += 1;
-          await this.sleep(retryAfter ?? this.retryDelayMs * attempt);
-          continue;
-        }
+      // A Retry-After beyond MAX_RETRY_AFTER_MS is not retried: the error below surfaces at
+      // once and names the wait the server asked for.
+      const retryAfter = retryable ? parseRetryAfter(responseHeaders["retry-after"]) : undefined;
+      const tooLong = retryAfter !== undefined && retryAfter > MAX_RETRY_AFTER_MS;
+      if (retryable && !tooLong && attempt < this.maxRetries) {
+        attempt += 1;
+        // Back off linearly from retryDelayMs. A Retry-After can ask for longer, never for
+        // less: `Retry-After: 0` or a date in the past turned the retries into a zero-delay
+        // burst against a server that had just asked for less load.
+        const backoff = this.retryDelayMs * attempt;
+        await this.sleep(retryAfter === undefined ? backoff : Math.max(retryAfter, backoff));
+        continue;
       }
 
       const contentType = String(responseHeaders["content-type"] ?? "");
       if (status < 200 || status >= 300) {
-        throw this.toApiError(method, url, status, data);
+        throw this.toApiError(method, url, status, data, {
+          retries: attempt,
+          ...(tooLong ? { retryAfterMs: retryAfter } : {}),
+        });
       }
 
       return { data, contentType, status };
@@ -535,7 +545,13 @@ export class RequestEngine {
     }
   }
 
-  private toApiError(method: string, url: string, status: number, body: Buffer): LadesaeulenApiError {
+  private toApiError(
+    method: string,
+    url: string,
+    status: number,
+    body: Buffer,
+    retry: { retries: number; retryAfterMs?: number },
+  ): LadesaeulenApiError {
     const text = this.scrub(body.toString("utf8"));
     let detail: string | undefined;
     try {
@@ -560,6 +576,14 @@ export class RequestEngine {
     // characters so a hostile endpoint cannot drive terminal escape sequences
     // into stderr via the error message.
     if (detail !== undefined) detail = sanitizeServerText(detail);
-    return new LadesaeulenApiError({ status, url, method, body: text, detail });
+    return new LadesaeulenApiError({
+      status,
+      url,
+      method,
+      body: text,
+      detail,
+      retries: retry.retries,
+      ...(retry.retryAfterMs === undefined ? {} : { retryAfterMs: retry.retryAfterMs, maxRetryAfterMs: MAX_RETRY_AFTER_MS }),
+    });
   }
 }
