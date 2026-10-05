@@ -274,3 +274,18 @@ test("a non-2xx ArcGIS error with an empty message reports its details", async (
       err.message === "HTTP 400 for GET https://example.test/fs/0?f=json: No where clause specified.",
   );
 });
+
+test("a body is decoded by the charset its Content-Type declares; a BOM is dropped", async () => {
+  const body = { features: [{ attributes: { Ort: "München" } }] };
+  for (const [contentType, bytes] of [
+    ["application/json; charset=iso-8859-1", Buffer.from(JSON.stringify(body), "latin1")],
+    ["application/json; charset=UTF-8", Buffer.from(JSON.stringify(body), "utf8")],
+    ["application/json", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(JSON.stringify(body))])],
+  ] as const) {
+    const mt = makeMockTransport(() => rawResponse(bytes, contentType));
+    const engine = new RequestEngine({ transport: mt.transport });
+    assert.deepEqual(await engine.getJson("/0/query"), body, contentType);
+  }
+  const mt = makeMockTransport(() => rawResponse("{}", "application/json; charset=x-nonsense"));
+  await assert.rejects(new RequestEngine({ transport: mt.transport }).getJson("/0/query"), LadesaeulenParseError);
+});

@@ -10,6 +10,7 @@ export {
   MAX_RETRIES,
   MAX_RETRY_AFTER_MS,
   parseRetryAfter,
+  decodeBody,
   describeArcGisError,
   validateBaseUrl,
 } from "./engine.js";

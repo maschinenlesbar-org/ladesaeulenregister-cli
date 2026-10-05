@@ -151,6 +151,9 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   as an `application/x-www-form-urlencoded` POST body, so the engine switches to a POST to
   the bare path once the GET URL would pass `MAX_GET_URL_LENGTH` (2,000 characters;
   `requestTarget()` decides, and error messages name the method actually used).
+- **Bodies are decoded by their declared charset** (`decodeBody`, `TextDecoder`): UTF-8
+  when the Content-Type names none, a leading BOM dropped, an unknown label a
+  `LadesaeulenParseError`. A Latin-1 answer keeps its umlauts.
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).
