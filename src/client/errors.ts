@@ -67,6 +67,18 @@ export function redactCredentials(text: string, credentials: readonly string[]):
   return out;
 }
 
+/**
+ * Longest URL or server text (in characters) an error message shows. A 2,000-character
+ * GET URL or a 200 kB error `detail` would otherwise put one huge line on stderr. The
+ * error's `url` and `body` properties keep the full value.
+ */
+export const MAX_MESSAGE_VALUE_LENGTH = 500;
+
+/** `text` cut to MAX_MESSAGE_VALUE_LENGTH characters, ending in "…" when cut. */
+export function cutForMessage(text: string): string {
+  return text.length > MAX_MESSAGE_VALUE_LENGTH ? `${text.slice(0, MAX_MESSAGE_VALUE_LENGTH)}…` : text;
+}
+
 /** Base class for every error originating from this client. */
 export class LadesaeulenError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -132,7 +144,7 @@ export class LadesaeulenApiError extends LadesaeulenError {
         : `ArcGIS error${args.arcgisCode !== undefined ? ` ${args.arcgisCode}` : ""}`;
     // The URL is shown without userinfo: a credential in the base URL must not leak.
     const url = redactUrl(args.url);
-    super(`${head} for ${args.method} ${url}${detailPart}${retryPart}`);
+    super(`${head} for ${args.method} ${cutForMessage(url)}${detailPart}${retryPart}`);
     this.status = args.status;
     this.arcgisCode = args.arcgisCode;
     this.url = url;

@@ -20,7 +20,9 @@ import {
   LadesaeulenError,
   LadesaeulenNetworkError,
   LadesaeulenParseError,
+  LadesaeulenValidationError,
   credentialsIn,
+  cutForMessage,
   redactCredentials,
   redactUrl,
 } from "./errors.js";
@@ -195,7 +197,7 @@ export function describeArcGisError(error: unknown): string | undefined {
     const text = sanitizeServerText(part).trim();
     if (text !== "") seen.add(text);
   }
-  return seen.size > 0 ? [...seen].join("; ") : undefined;
+  return seen.size > 0 ? cutForMessage([...seen].join("; ")) : undefined;
 }
 
 /**
@@ -223,6 +225,11 @@ export function assertHeaderValue(name: string, value: string): string {
 
 /** Check every `defaultHeaders` name (a token) and value; returns a copy. */
 function checkedHeaders(headers: Record<string, string>): Record<string, string> {
+  if (typeof headers !== "object" || headers === null || Array.isArray(headers)) {
+    throw new LadesaeulenValidationError(
+      `Invalid defaultHeaders: expected an object of header names and values, got ${headers === null ? "null" : Array.isArray(headers) ? "an array" : typeof headers}.`,
+    );
+  }
   const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(headers)) {
     assertValid("defaultHeaders name", name, headerNameProblem);
@@ -301,6 +308,12 @@ export class RequestEngine {
   private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(options: EngineOptions = {}) {
+    // A JavaScript caller may pass null for "no options"; treat it like undefined rather
+    // than failing with a raw TypeError on the first property read.
+    options = options ?? {};
+    if (typeof options !== "object") {
+      throw new LadesaeulenValidationError(`Invalid options: expected an object, got ${typeof options}.`);
+    }
     // Checked raw, before the trailing-slash strip (see validateBaseUrl).
     this.#baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.#credentials = credentialsIn(this.#baseUrl).flatMap((raw) => {
@@ -310,6 +323,9 @@ export class RequestEngine {
         return [raw];
       }
     });
+    if (options.transport !== undefined && typeof options.transport !== "function") {
+      throw new LadesaeulenValidationError(`Invalid transport: expected a function, got ${typeof options.transport}.`);
+    }
     this.transport = options.transport ?? nodeHttpTransport;
     // Header values are checked up front: a blank one would be sent as is, and a
     // CR/LF or a character above U+00FF would reach a custom transport raw or make
@@ -331,6 +347,9 @@ export class RequestEngine {
       Number.MAX_SAFE_INTEGER,
       DEFAULT_MAX_RESPONSE_BYTES,
     );
+    if (options.sleep !== undefined && typeof options.sleep !== "function") {
+      throw new LadesaeulenValidationError(`Invalid sleep: expected a function, got ${typeof options.sleep}.`);
+    }
     this.sleep = options.sleep ?? realSleep;
   }
 
@@ -576,7 +595,9 @@ export class RequestEngine {
     // `detail` came from the attacker-controlled response body; strip control
     // characters so a hostile endpoint cannot drive terminal escape sequences
     // into stderr via the error message.
-    if (detail !== undefined) detail = sanitizeServerText(detail);
+    // ... and cut it, so a hostile or buggy body cannot flood stderr with one huge line
+    // (LadesaeulenApiError.body keeps the full text).
+    if (detail !== undefined) detail = cutForMessage(sanitizeServerText(detail));
     return new LadesaeulenApiError({
       status,
       url,

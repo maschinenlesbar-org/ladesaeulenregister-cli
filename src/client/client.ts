@@ -175,6 +175,16 @@ function checkNumber(name: string, value: unknown, min: number, max: number): vo
 }
 
 /**
+ * A query argument: `undefined` and `null` mean "no options" (`{}`); anything else must
+ * be a plain object, else a `LadesaeulenValidationError` rather than a raw TypeError.
+ */
+function queryArg(q: unknown): StationQuery {
+  if (q === undefined || q === null) return {};
+  if (typeof q !== "object" || Array.isArray(q)) throw invalid("query", "an object", Array.isArray(q) ? "an array" : q);
+  return q as StationQuery;
+}
+
+/**
  * Validate a station query before any request, so a library caller gets a typed
  * `LadesaeulenValidationError` instead of a remote ArcGIS 400 (or a silently
  * odd request such as `distance=Infinity` or `resultRecordCount=-3`).
@@ -253,6 +263,7 @@ export class LadesaeulenClient {
 
   /** A page of charging stations (ArcGIS `f=json`); `limit` defaults to `DEFAULT_LIMIT`. */
   async stations(q: StationQuery = {}): Promise<StationPage> {
+    q = queryArg(q);
     const params = this.buildParams(
       { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
       { f: "json", returnGeometry: false },
@@ -271,6 +282,7 @@ export class LadesaeulenClient {
    * on a count and would return the full total, not a per-page count.
    */
   async count(q: StationQuery = {}): Promise<number> {
+    q = queryArg(q);
     assertValid("count query", q, countQueryProblem);
     const params = this.buildParams(q, { f: "json", returnCountOnly: true });
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
@@ -290,6 +302,7 @@ export class LadesaeulenClient {
    * is a `LadesaeulenParseError`, never an empty map.
    */
   async geojson(q: StationQuery = {}): Promise<GeoJsonFeatureCollection> {
+    q = queryArg(q);
     const params = this.buildParams(
       { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
       { f: "geojson" },

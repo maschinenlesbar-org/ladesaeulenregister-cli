@@ -135,6 +135,13 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   body, `detail`, a transport's error message and its `cause` chain — has the userinfo
   (raw and percent-decoded) scrubbed. `test/conformance-p2-library-redaction.test.ts`
   checks the client, nine failing transports and five rejected base URLs.
+  Wrong-typed arguments are a `LadesaeulenValidationError` too, never a raw
+  `TypeError`: a query that is not an object (`null`/`undefined` mean `{}`), options
+  that are not an object, a `transport` or `sleep` that is not a function,
+  `defaultHeaders` that is not an object. Messages cut a URL or server text at
+  `MAX_MESSAGE_VALUE_LENGTH` (500) characters (`cutForMessage`); `url` and `body` keep
+  the full value. `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
+  charset, the 2xx shapes and fifteen wrong-typed calls.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,

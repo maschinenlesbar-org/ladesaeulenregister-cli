@@ -289,3 +289,14 @@ test("a body is decoded by the charset its Content-Type declares; a BOM is dropp
   const mt = makeMockTransport(() => rawResponse("{}", "application/json; charset=x-nonsense"));
   await assert.rejects(new RequestEngine({ transport: mt.transport }).getJson("/0/query"), LadesaeulenParseError);
 });
+
+test("server text and long URLs are cut at 500 characters in messages, kept whole in body/url", async () => {
+  const long = "x".repeat(5000);
+  const mt = makeMockTransport(() => jsonResponse({ error: { code: 400, message: long } }, 400));
+  const engine = new RequestEngine({ transport: mt.transport });
+  const err = await engine.getJson("/0/query", { where: `ID='${"9".repeat(1500)}'` }).catch((e: unknown) => e);
+  assert.ok(err instanceof LadesaeulenApiError);
+  assert.ok(err.message.length < 1200, String(err.message.length));
+  assert.ok(err.body.includes(long));
+  assert.ok(err.url.length > 1500);
+});
