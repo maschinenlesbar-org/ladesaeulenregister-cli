@@ -176,6 +176,9 @@ asserts that both reject with no request sent, or both send the identical reques
 
 - **Zero runtime HTTP deps**; strict TS + ESM; passes on Node 20/22/24.
 - **Exit codes** (`run.ts`): help/version → 0; usage → 2; 404 → 4; network → 6; other → 1.
+  The bin shim installs `handleOutputErrors()` (`io.ts`) before `run()`: an EPIPE on
+  stdout (`| head`) exits 0 quietly, an EPIPE on stderr is ignored so the run's own code
+  stands (`test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin).
 - **Scaffold origin:** scaffolded from `marktstammdatenregister-cli` (GET + query,
   no auth); adapted for the ArcGIS `/query` semantics and the `error` envelope.
 

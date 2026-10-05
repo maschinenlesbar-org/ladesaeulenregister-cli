@@ -98,6 +98,10 @@ ladesaeulen fields --compact | jq '.[].name'
 | `4` | HTTP 404 |
 | `6` | network / transport failure (DNS, connection, timeout, response size-cap) |
 
+A reader that stops early (`ladesaeulen count-by Ort | head -n 3`) ends the run quietly
+with `0`. When stderr's reader is gone (`2>&1 | true`), a failed run still exits with its
+own code.
+
 ## Notes
 
 - **The ArcGIS server reports logical errors as HTTP 200 with an `error` object**
