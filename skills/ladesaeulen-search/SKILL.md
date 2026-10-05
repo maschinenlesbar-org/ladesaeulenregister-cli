@@ -64,13 +64,17 @@ ladesaeulen stations --where "Ort='München'" --min-point-kw 300 --limit 200 --c
 # How many stations nationwide have a charge point of at least 150 kW?
 ladesaeulen stations --min-point-kw 150 --count   # reads every candidate: one request per 2,000
 
-# Total public charging stations in Germany
+# Stations in the register (not every public charger in Germany: see Traps)
 ladesaeulen stations --count
 ```
 
 ## Traps
 
 - **Prefer `--count` for "how many?"** — never page through the whole register to count.
+- **The register undercounts.** It lists only the stations whose operators have completed
+  the BNetzA's notification procedure (Anzeigeverfahren); the BNetzA itself says the number
+  of public charging stations in Germany is higher. Answer "how many public chargers exist in
+  Germany?" as "the register lists N stations", with that caveat, never as the total.
 - **Say how current the answer is.** The register is a snapshot, refreshed irregularly,
   and no row carries a date: run `ladesaeulen info` once and give its `dataLastEditDate`
   ("as of 1 October 2026") with every count.

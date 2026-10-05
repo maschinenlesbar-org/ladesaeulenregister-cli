@@ -10,5 +10,7 @@ de:
   intro: >-
     Ein schlanker **TypeScript-Client mit CLI** für das **Ladesäulenregister** – das Register
     der Bundesnetzagentur für öffentliche Ladeeinrichtungen für E-Autos in Deutschland (rund
-    116.000 Ladeeinrichtungen, Stand September 2026). Die Daten stammen aus einem öffentlichen **ArcGIS
+    117.600 Ladeeinrichtungen, Stand Oktober 2026). Es enthält die Ladeeinrichtungen der Betreiber,
+    die das Anzeigeverfahren der Bundesnetzagentur abgeschlossen haben; die tatsächliche Zahl
+    öffentlicher Ladeeinrichtungen ist daher höher. Die Daten stammen aus einem öffentlichen **ArcGIS
     FeatureServer**. Eine [bund.dev](https://bund.dev)-API.

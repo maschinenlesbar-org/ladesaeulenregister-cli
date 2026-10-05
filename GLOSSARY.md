@@ -5,7 +5,7 @@ data are German (with umlauts); keep them verbatim in `--where`.
 
 | Term | In the CLI | What it is |
 |---|---|---|
-| **Ladesäulenregister** | — | The Bundesnetzagentur's register of publicly accessible EV charging stations in Germany. |
+| **Ladesäulenregister** | — | The Bundesnetzagentur's register of publicly accessible EV charging stations in Germany. It lists only the stations whose operators have completed the notification procedure (Anzeigeverfahren), so it **undercounts**: the BNetzA notes that the number of public charging stations in Germany is higher. |
 | **Ladeeinrichtung** (station) | a feature / row | One charging station. `Typ` is `Normalladeeinrichtung` or `Schnellladeeinrichtung` — by power, not by current type (see below). |
 | **Ladepunkt** (charge point) | `Anzahl_Ladepunkte` | A single connector/socket. A station has one or more; the register counts *stations*, not charge points. `Anzahl_Ladepunkte` is a text column (`"2"`). |
 | **Betreiber / operator** | `Betreiber`, `operator_companyName` | The charge-point operator. `operator_companyName` is the company name and is filled on every station; `Betreiber` is a short display name that is `null` on more than half of the stations, so filter and group on `operator_companyName`. |

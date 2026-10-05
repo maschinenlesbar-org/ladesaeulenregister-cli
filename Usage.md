@@ -1,6 +1,8 @@
 # Usage
 
 `ladesaeulen` — a CLI for the Bundesnetzagentur Ladesäulenregister. No API key needed.
+The register lists the stations whose operators have completed the BNetzA's notification
+procedure, so counts are "listed in the register", not every public charger in Germany.
 
 ```bash
 ladesaeulen [global options] <command> [command options]

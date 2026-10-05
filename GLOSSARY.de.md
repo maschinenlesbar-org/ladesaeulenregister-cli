@@ -5,7 +5,7 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 
 | Begriff | In der CLI | Was es ist |
 |---|---|---|
-| **Ladesäulenregister** | – | Das Register der Bundesnetzagentur für öffentlich zugängliche Ladeeinrichtungen für E-Autos in Deutschland. |
+| **Ladesäulenregister** | – | Das Register der Bundesnetzagentur für öffentlich zugängliche Ladeeinrichtungen für E-Autos in Deutschland. Es enthält nur die Ladeeinrichtungen der Betreiber, die das Anzeigeverfahren vollständig abgeschlossen haben, und **zählt daher zu wenig**: Laut Bundesnetzagentur ist die Zahl der öffentlich zugänglichen Ladeeinrichtungen in Deutschland größer. |
 | **Ladeeinrichtung** | ein Feature / eine Zeile | Eine einzelne Ladestation. `Typ` ist `Normalladeeinrichtung` oder `Schnellladeeinrichtung` – nach Leistung, nicht nach Stromart (siehe unten). |
 | **Ladepunkt** | `Anzahl_Ladepunkte` | Ein einzelner Anschluss bzw. eine einzelne Steckdose. Eine Ladeeinrichtung hat einen oder mehrere; das Register zählt *Ladeeinrichtungen*, nicht Ladepunkte. `Anzahl_Ladepunkte` ist eine Textspalte (`"2"`). |
 | **Betreiber / operator** | `Betreiber`, `operator_companyName` | Der Betreiber der Ladepunkte. `operator_companyName` ist der Firmenname und bei jeder Ladeeinrichtung gefüllt; `Betreiber` ist ein kurzer Anzeigename, der bei mehr als der Hälfte der Ladeeinrichtungen `null` ist. Filtern und gruppieren Sie daher nach `operator_companyName`. |

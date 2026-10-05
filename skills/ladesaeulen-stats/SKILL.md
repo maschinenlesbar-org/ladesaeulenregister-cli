@@ -81,6 +81,9 @@ echo "fast: $fast / total: $total"
   the CLI then prints `Note: more groups exist …` on stderr). The top of the list is still right, because the server sorts
   by count before cutting, so slice with `jq '.[:N]'`; but don't report the length as
   "the number of cities/operators". Narrow with `--where` if you need every group.
+- **The register undercounts.** It lists only the stations whose operators have completed
+  the BNetzA's notification procedure, so totals per Bundesland or operator are "listed in the
+  register", not every public charger; say so when you report them.
 - **It counts stations (Ladeeinrichtungen), not charge points** — a station can have
   several `Anzahl_Ladepunkte`; say which the user wants.
 - Cite the source: © Bundesnetzagentur, Ladesäulenregister (CC BY 4.0).

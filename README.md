@@ -7,8 +7,9 @@
 **Website:** [English](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/) · [Deutsch](https://maschinenlesbar-org.github.io/ladesaeulenregister-cli/de/) — command reference, guides and API docs
 
 A dependency-light **TypeScript client + CLI** for the **Ladesäulenregister** — the
-Bundesnetzagentur's register of public EV charging stations in Germany (about 116,000
-Ladeeinrichtungen as of September 2026). Backed by a public **ArcGIS FeatureServer**. A
+Bundesnetzagentur's register of public EV charging stations in Germany (about 117,600
+Ladeeinrichtungen as of October 2026). It lists the stations whose operators have completed
+the BNetzA's notification procedure, so the real number of public stations is higher. Backed by a public **ArcGIS FeatureServer**. A
 [bund.dev](https://bund.dev) API.
 
 - **No API key.** The public charging-station data is open.
@@ -34,7 +35,7 @@ Requires **Node.js 22.12+**. If `ladesaeulen` isn't found after a global install
 
 ```bash
 # (counts as of 2026-09-15)
-ladesaeulen stations --count                                   # total public stations → 116343
+ladesaeulen stations --count                                   # stations in the register → 116343
 ladesaeulen stations --where "Ort='Berlin' AND Typ='Schnellladeeinrichtung'" --count   # → 695
 ladesaeulen stations --near 52.52,13.405 --radius 1 --count    # within 1 km of a point → 127
 ladesaeulen stations --where "state='Bayern'" --limit 20       # a page of stations
