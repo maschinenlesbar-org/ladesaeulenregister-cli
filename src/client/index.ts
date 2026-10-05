@@ -35,6 +35,9 @@ export {
   LadesaeulenNetworkError,
   LadesaeulenValidationError,
   LadesaeulenParseError,
+  credentialsIn,
+  redactCredentials,
+  redactUrl,
 } from "./errors.js";
 
 export * from "./types.js";

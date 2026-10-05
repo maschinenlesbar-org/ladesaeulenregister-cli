@@ -95,6 +95,15 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `LadesaeulenValidationError` (`Invalid baseUrl: …`), not a network error.
   `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
   transport's per-hop scheme check and real transport failures.
+  **The CLI redacts credentials on output:** `run.ts` (`withRedactedOutput`) takes the
+  exact userinfo of every argument (`credentialsIn`, exported) and replaces it with
+  `***` in everything it prints — commander's usage errors, which echo rejected values
+  (`argument '<url>' is invalid`, `unknown command '<url>'`, `too many arguments … got
+  1: <url>`), the help that follows them, and API errors — so a password with spaces,
+  quotes, `#`, `?` or `/` is caught as well as an ordinary one. `redactUrl` falls back to
+  the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
+  `test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
+  nine argv positions.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,
