@@ -17,7 +17,7 @@ They compose: **search → near**, or **search → stats**.
 
 - The `ladesaeulen` CLI on PATH: `npm install -g @maschinenlesbar.org/ladesaeulenregister-cli`.
 - **No API key** — the register's public data is open.
-- **Notes:** `--where` is Esri SQL (case-sensitive, single-quoted strings — confirm
+- **Notes:** `--where` is Esri SQL (single-quoted strings, compared ignoring case — confirm
   column names and types with `ladesaeulen fields`); `max_electric_power_station` is the
   station's figure, often the sum of its charge points, so "charge at N kW" uses
   `--min-point-kw N` and its `max_charge_point_kw` per charge point; filter and group operators

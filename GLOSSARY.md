@@ -18,7 +18,7 @@ data are German (with umlauts); keep them verbatim in `--where`.
 | **`Steckersystem_Ladepunkt1..10`** | fields | Connector system per charge point, one line per connector with its rating: `DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)`, `AC Typ 2 Steckdose (22 kw)\nAC Schuko (22 kw)`; `( kw)` when the operator left the rating empty. The register fills at most six. |
 | **`coordinates_latitude` / `coordinates_longitude`** | fields | WGS84 position (also the feature geometry). |
 | **FeatureServer / layer** | `--base-url` | The ArcGIS service; charging stations are layer `0`. |
-| **`--where`** | option | Esri SQL filter over the columns (case-sensitive, single-quoted strings). |
+| **`--where`** | option | Esri SQL filter over the columns, strings single-quoted. Text comparisons ignore case (`Ort='berlin'` matches `Berlin`, also with `LIKE`), so a case variant finds nothing new. |
 | **`--near` / `--radius`** | options | Spatial query: stations within `radius` km of a `lat,lon` point. |
 | **`exceededTransferLimit`** | output field | `true` ⇒ more features matched than were returned; page with `--limit`/`--offset`. |
 | **`count-by`** | command | Server-side grouped counts (`outStatistics`), e.g. stations per `state`. |

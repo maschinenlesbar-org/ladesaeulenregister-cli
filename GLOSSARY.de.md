@@ -18,7 +18,7 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 | **`Steckersystem_Ladepunkt1..10`** | Felder | Steckersystem je Ladepunkt, eine Zeile je Stecker mit seiner Leistung: `DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)`, `AC Typ 2 Steckdose (22 kw)\nAC Schuko (22 kw)`; `( kw)`, wenn der Betreiber die Leistung leer gelassen hat. Das Register füllt höchstens sechs. |
 | **`coordinates_latitude` / `coordinates_longitude`** | Felder | Position in WGS84 (zugleich die Geometrie des Features). |
 | **FeatureServer / Layer** | `--base-url` | Der ArcGIS-Dienst; die Ladeeinrichtungen liegen in Layer `0`. |
-| **`--where`** | Option | Esri-SQL-Filter über die Spalten (unterscheidet Groß- und Kleinschreibung, Zeichenketten in einfachen Anführungszeichen). |
+| **`--where`** | Option | Esri-SQL-Filter über die Spalten, Zeichenketten in einfachen Anführungszeichen. Textvergleiche ignorieren Groß- und Kleinschreibung (`Ort='berlin'` findet `Berlin`, auch mit `LIKE`); eine andere Schreibweise findet also nichts Neues. |
 | **`--near` / `--radius`** | Optionen | Räumliche Abfrage: Ladeeinrichtungen im Umkreis von `radius` km um einen Punkt `lat,lon`. |
 | **`exceededTransferLimit`** | Ausgabefeld | `true` ⇒ es passten mehr Features, als zurückgegeben wurden; blättern Sie mit `--limit`/`--offset`. |
 | **`count-by`** | Befehl | Serverseitig gruppierte Zählungen (`outStatistics`), z. B. Ladeeinrichtungen je `state`. |

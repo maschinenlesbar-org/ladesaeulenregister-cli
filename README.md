@@ -49,7 +49,7 @@ ladesaeulen fields                                             # the queryable c
 - **`count-by <field>`** aggregates (e.g. per `state`, `Typ`, `operator_companyName`).
 - **`fields`** lists the queryable columns (build `--where`/`--fields`/`count-by`).
 
-Filter values are **SQL, case-sensitive, single-quoted** (`Ort='Berlin'`). `max_electric_power_station` is
+Filter values are **SQL, single-quoted** (`Ort='Berlin'`); text comparisons ignore case. `max_electric_power_station` is
 the operator's figure for the whole station — often the **sum** of its charge points (2 × 160 kW
 reads `320`) — and a text column (`CAST(max_electric_power_station AS FLOAT) >= 150`). For
 "where can a car charge at N kW", use `--min-point-kw N`: it reads each charge point's

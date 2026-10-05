@@ -74,8 +74,9 @@ ladesaeulen stations --count
 - **`stations` returns `{ features, exceededTransferLimit }`.** If
   `exceededTransferLimit` is `true`, more matched than were returned — page with
   `--limit`/`--offset` (or narrow the `--where`).
-- **`--where` is SQL, values are case-sensitive** and single-quoted (`Ort='Berlin'`,
-  not `Berlin`). Use `LIKE '%…%'` for partial operator names. Confirm exact field
+- **`--where` is SQL, values are single-quoted** (`Ort='Berlin'`, not `Berlin`). Text
+  comparisons ignore case (`Ort='berlin'` = `Ort='Berlin'`, `LIKE '%enbw%'` = `LIKE
+  '%EnBW%'`), so don't retry with other casings or add `UPPER()`/`LOWER()`. Use `LIKE '%…%'` for partial operator names. Confirm exact field
   names with `ladesaeulen fields`.
 - **`max_electric_power_station` is not the power a car can get.** It is the operator's
   figure for the whole station, and many operators enter the **sum** of the charge points:

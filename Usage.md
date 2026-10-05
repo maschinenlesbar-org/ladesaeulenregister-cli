@@ -63,7 +63,10 @@ still correct because the server sorts by count first.
 
 Standard Esri SQL over the layer's columns:
 
-- strings are **case-sensitive and single-quoted**: `Ort='Berlin'`, `state='Bayern'`
+- strings are **single-quoted**: `Ort='Berlin'`, `state='Bayern'`. Text comparisons
+  **ignore case**, with `=` and `LIKE` alike: `Ort='berlin'` counts the same 4,996
+  stations as `Ort='Berlin'` (2026-10-06), so retrying with another casing finds nothing
+  new, and case cannot tell two values apart
 - partial match: `operator_companyName LIKE '%EnBW%'`
 - `max_electric_power_station` is the operator's figure for the **whole station**, often the
   sum of its charge points (2 × 160 kW reads `320`), so it is not the power a car can get:
