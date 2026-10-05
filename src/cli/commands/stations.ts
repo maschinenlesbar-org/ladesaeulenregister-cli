@@ -7,6 +7,7 @@ import type { CliDeps } from "../io.js";
 import type { StationQuery } from "../../client/types.js";
 import { LadesaeulenValidationError } from "../../client/errors.js";
 import { DEFAULT_LIMIT, MAX_LIMIT } from "../../client/client.js";
+import { EMPTY_FIELDS, emptyFieldsIn } from "../../client/columns.js";
 import { countIgnoredOptions, type COUNT_IGNORED_KEYS } from "../../client/validate.js";
 import {
   action,
@@ -46,6 +47,20 @@ function truncationNote(rows: number, limit: number, filtered = false): string {
   return (
     "Note: more stations match than were returned (the server caps a page at ~2000 rows). " +
     "Page with --offset, or narrow --where."
+  );
+}
+
+/**
+ * The stderr note for columns the register never fills (`EMPTY_FIELDS`) named in a filter,
+ * sort, field list or group: their filters match nothing and their groups are one null
+ * group, with exit 0, so say so rather than let the 0 read like an answer.
+ */
+function emptyFieldsNote(deps: CliDeps, texts: Array<string | undefined>): void {
+  const names = [...new Set(texts.flatMap((t) => (t === undefined ? [] : emptyFieldsIn(t))))];
+  if (names.length === 0) return;
+  deps.io.err(
+    `Note: ${names.join(", ")} ${names.length === 1 ? "is" : "are"} empty on every row of the register ` +
+      "(checked 2026-10-06), so a filter on it matches nothing and a group on it is one null group.",
   );
 }
 
@@ -130,6 +145,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
           throw new LadesaeulenValidationError("--count and --geojson cannot be combined.");
         }
         const q = buildStationQuery(opts);
+        emptyFieldsNote(deps, [q.where, q.orderBy, q.outFields]);
         if (q.near && isOutsideGermany(q.near.lat, q.near.lon)) {
           deps.io.err(
             `Note: --near point (lat ${q.near.lat}, lon ${q.near.lon}) is outside Germany — ` +
@@ -163,6 +179,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .action(
       action(deps, async ({ client, global, opts }, [field]) => {
         const where = typeof opts["where"] === "string" ? opts["where"] : "1=1";
+        emptyFieldsNote(deps, [field, where]);
         const page = await client.countByPage(field!, where);
         if (page.exceededTransferLimit) {
           deps.io.err(
@@ -189,6 +206,13 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .action(
       action(deps, async ({ client, global }) => {
         const fields = await client.fields();
+        const empty = fields.filter((f) => EMPTY_FIELDS.includes(f.name)).map((f) => f.name);
+        if (empty.length > 0) {
+          deps.io.err(
+            `Note: ${empty.length} of these columns are empty on every row of the register (checked 2026-10-06): ` +
+              `${empty.join(", ")}.`,
+          );
+        }
         renderJson(
           deps,
           global,

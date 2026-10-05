@@ -19,6 +19,7 @@ export {
   maxChargePointKw,
   stationPowerKw,
 } from "./power.js";
+export { EMPTY_FIELDS, emptyFieldsIn } from "./columns.js";
 export type { LadesaeulenClientOptions } from "./client.js";
 export {
   RequestEngine,

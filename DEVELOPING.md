@@ -194,6 +194,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   returns the name, `lastEditDate`, `dataLastEditDate` (epoch ms → ISO 8601) and
   `maxRecordCount`, from the same request `fields()` makes. The layer is refreshed
   irregularly (last edit 2026-10-01 when checked on 2026-10-05).
+- **Sixteen columns are always empty** (`columns.ts`, `EMPTY_FIELDS`; one live
+  `IS NOT NULL` count over all of them gave 0 on 2026-10-06): the `evses_*` per-connector
+  columns, `documentDate`, `documentTime`, `json_type`, `Steckersystem_Ladepunkt7..10`.
+  `emptyFieldsIn(text)` finds them in a `where`/`orderBy`/`outFields`/group field; the CLI
+  prints a stderr note then (exit code unchanged), and `fields` names them.
 - Coordinates are in `coordinates_latitude`/`coordinates_longitude` (and the geometry).
   `stations()` requests `returnGeometry=false` for lean JSON; `--geojson` returns full
   geometry.

@@ -391,3 +391,25 @@ test("info prints the layer's name and edit dates", async () => {
     maxRecordCount: null,
   });
 });
+
+test("a filter or group on a column the register never fills gets a stderr note, exit 0", async () => {
+  const col = "evses_evse_connectors_connector___max_electric_power_connector";
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--where", `${col} >= 150`, "--count"], cli.deps), 0);
+  assert.match(cli.err.join("\n"), new RegExp(`^Note: ${col} is empty on every row of the register`));
+  const grouped = makeCli(() => jsonResponse({ features: [{ attributes: { documentDate: null, count: 117584 } }] }));
+  assert.equal(await run(["count-by", "documentDate"], grouped.deps), 0);
+  assert.match(grouped.err.join("\n"), /Note: documentDate is empty on every row/);
+  // Steckersystem_Ladepunkt1 is filled; it must not be mistaken for Steckersystem_Ladepunkt10.
+  const quiet = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--where", "Steckersystem_Ladepunkt1 LIKE '%DC%'", "--count"], quiet.deps), 0);
+  assert.deepEqual(quiet.err, []);
+});
+
+test("fields notes the columns that are empty on every row", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ fields: [{ name: "Ort", type: "esriFieldTypeString" }, { name: "json_type", type: "esriFieldTypeString" }] }),
+  );
+  assert.equal(await run(["fields"], cli.deps), 0);
+  assert.equal(cli.err.join("\n"), "Note: 1 of these columns are empty on every row of the register (checked 2026-10-06): json_type.");
+});

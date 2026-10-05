@@ -43,6 +43,14 @@ data are German (with umlauts); keep them verbatim in `--where`.
 - **`go_live_date` is `dd.mm.yyyy` text**, so `--order-by "go_live_date DESC"` returns
   `31.12.2025` first although stations went live in 2026. Filter by year or month with
   `LIKE '%.2026'` / `LIKE '%.08.2026'` instead of sorting.
+- **Sixteen listed columns are always empty.** `ladesaeulen fields` lists them, but they are
+  `null` on every row (checked 2026-10-06): the per-connector `evses_*` columns (e.g.
+  `evses_evse_connectors_connector___max_electric_power_connector`), `documentDate`,
+  `documentTime`, `json_type` and `Steckersystem_Ladepunkt7..10`. A filter on one matches
+  nothing (`0`, exit 0) and a group on one is a single `null` group; the CLI prints a note
+  when you name one. `F_overlaps` (always `1`) and `fme_rejection_code` (always
+  `MISSING_PARAMETER_LIST`) are filled but say nothing about a station. Per-connector power
+  is in the `Steckersystem_LadepunktN` text instead (`max_charge_point_kw`).
 - **It counts stations, not charge points** — a station may host several
   `Anzahl_Ladepunkte`; be explicit about which the user asked for.
 - **The register is a snapshot, refreshed irregularly.** No row carries an as-of date

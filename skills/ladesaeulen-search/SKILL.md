@@ -115,6 +115,10 @@ ladesaeulen stations --count
   '%EnBW%'` counted 42 stations where `operator_companyName LIKE '%EnBW%'` counted 825.
   Company names can carry a trailing space (`EnBW mobility+ AG und Co.KG `), so match
   with `LIKE '%…%'` rather than `=`.
+- **Don't filter on the `evses_*` columns, `documentDate` or `json_type`.** They are listed
+  by `ladesaeulen fields` but empty on every row, so a filter on them gives `0` (the CLI
+  prints a `Note: … is empty on every row` line); per-connector power comes from
+  `--min-point-kw`.
 - **Default columns are curated** — pass `--fields '*'` for everything (includes a
   large raw JSON blob per row).
 - Nearby-a-point search → the **ladesaeulen-near** skill; per-region totals → the
