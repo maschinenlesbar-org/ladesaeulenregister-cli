@@ -69,7 +69,21 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **Retries honour `Retry-After`.** A 429/503 is retried up to `maxRetries` times, each
   after the response's `Retry-After` (delay-seconds or an IMF-fixdate, parsed strictly by
   `parseRetryAfter`), else after `retryDelayMs * attempt`. A `Retry-After` above
-  `MAX_RETRY_AFTER_MS` (30 s) is not retried: the error surfaces at once.
+  `MAX_RETRY_AFTER_MS` (30 s) is not retried: the error surfaces at once. Network errors
+  (a reset or refused connection, DNS, a timeout) are not retried; they surface at once
+  as `LadesaeulenNetworkError` (exit 6).
+- **Every transport is held to the same contract** (`engine.ts`), so a custom one (a
+  `fetch` adapter, a test double) needs none of it itself: each call runs under the
+  overall `timeoutMs` deadline (the request carries an `AbortSignal`,
+  `HttpRequest.signal`, that fires then, and the call rejects at the deadline whether
+  the transport stops or not); `maxResponseBytes` is checked on the body it returns
+  (`Response exceeded the size limit of N bytes (maxResponseBytes; --max-response-bytes
+  on the CLI)`); headers may come as a plain record in any case, a `Headers` object or
+  a `Map`; the body may be a `Buffer`, any `ArrayBuffer` view or an `ArrayBuffer` (from
+  any realm). Whatever else a transport throws or returns — a plain `Error`, a string,
+  `null`, a response without a valid status — becomes a `LadesaeulenNetworkError`
+  (`GET <url> failed: <reason>`, URL redacted, the original as `cause`).
+  `test/conformance-p5-transport-contract.test.ts` checks it.
 - **The client validates its own arguments** before any request (not only the CLI):
   `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single

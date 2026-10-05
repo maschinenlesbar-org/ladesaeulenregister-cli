@@ -359,3 +359,13 @@ test("--help names the --timeout and --max-retries defaults", async () => {
   assert.match(help, /--timeout <ms> .*default 30000/);
   assert.match(help, /--max-retries <n> .*default 2\b/);
 });
+
+test("an error a custom transport throws is a network error: exit 6, not 'Unexpected error'", async () => {
+  const cli = makeCli(() => {
+    throw Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+  });
+  const code = await run(["stations", "--count"], cli.deps);
+  assert.equal(code, 6);
+  assert.match(cli.err.join("\n"), /^Error: GET .* failed: read ECONNRESET/);
+  assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
+});

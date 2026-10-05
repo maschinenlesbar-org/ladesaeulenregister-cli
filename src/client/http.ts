@@ -17,10 +17,22 @@ export interface HttpRequest {
   headers?: Record<string, string>;
   /** Optional request body (already serialised). */
   body?: string | Buffer;
-  /** Timeout for the whole request, response body included, in milliseconds. */
+  /**
+   * Timeout for the whole request, response body included, in milliseconds. The engine
+   * enforces it as an overall deadline whatever the transport does (see `signal`).
+   */
   timeoutMs?: number;
-  /** Hard cap on the response body size in bytes; the request aborts if exceeded. */
+  /**
+   * Hard cap on the response body size in bytes. The default transport aborts as soon
+   * as it is exceeded; the engine checks the body it gets back from any transport.
+   */
   maxResponseBytes?: number;
+  /**
+   * Aborted when the engine's overall deadline (`timeoutMs`) passes. A transport should stop
+   * the request then (`fetch(url, { signal })`); the engine rejects at the deadline either way,
+   * and enforces `maxResponseBytes` on the body it gets back, so neither limit depends on it.
+   */
+  signal?: AbortSignal;
 }
 
 export interface HttpResponse {
@@ -29,7 +41,19 @@ export interface HttpResponse {
   body: Buffer;
 }
 
+/**
+ * A transport: one HTTP exchange, resolving with the response whatever its status.
+ * The engine accepts more than the declared shape from a JavaScript transport (a fetch
+ * `Headers` object or a `Map` for `headers`, header names in any case, any ArrayBuffer
+ * view or ArrayBuffer as `body`) and turns anything else it returns or throws into a
+ * `LadesaeulenNetworkError`.
+ */
 export type Transport = (request: HttpRequest) => Promise<HttpResponse>;
+
+/** The message for a body over the size cap, naming the option on both sides. */
+export function sizeLimitMessage(maxBytes: number): string {
+  return `Response exceeded the size limit of ${maxBytes} bytes (maxResponseBytes; --max-response-bytes on the CLI)`;
+}
 
 /**
  * The longest delay Node's timers support (2^31 - 1 ms, about 24.8 days). A longer one
@@ -95,7 +119,7 @@ export const nodeHttpTransport: Transport = (request) =>
             if (maxBytes !== undefined && received > maxBytes) {
               aborted = true;
               res.destroy();
-              fail(new LadesaeulenNetworkError(`Response exceeded maxResponseBytes (${maxBytes})`));
+              fail(new LadesaeulenNetworkError(sizeLimitMessage(maxBytes)));
               return;
             }
             chunks.push(chunk);
@@ -130,6 +154,16 @@ export const nodeHttpTransport: Transport = (request) =>
         fail(err);
         req.destroy(err);
       }, Math.min(timeoutMs, MAX_TIMEOUT_MS));
+    }
+
+    if (request.signal !== undefined) {
+      const abort = (): void => {
+        const err = new LadesaeulenNetworkError(`Request timed out after ${request.timeoutMs ?? 0}ms`);
+        fail(err);
+        req.destroy(err);
+      };
+      if (request.signal.aborted) abort();
+      else request.signal.addEventListener("abort", abort, { once: true });
     }
 
     req.on("error", (err) => {
