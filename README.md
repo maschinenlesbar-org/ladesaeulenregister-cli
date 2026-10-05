@@ -27,6 +27,9 @@ npm install -g @maschinenlesbar.org/ladesaeulenregister-cli   # the `ladesaeulen
 npm install @maschinenlesbar.org/ladesaeulenregister-cli
 ```
 
+Requires **Node.js 22.12+**. If `ladesaeulen` isn't found after a global install, run
+`npm prefix -g` and add its `bin` directory (on Windows, the prefix itself) to `PATH`.
+
 ## CLI
 
 ```bash

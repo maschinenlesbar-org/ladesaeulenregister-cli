@@ -189,7 +189,7 @@ asserts that both reject with no request sent, or both send the identical reques
 
 ## Conventions to keep
 
-- **Zero runtime HTTP deps**; strict TS + ESM; passes on Node 20/22/24.
+- **Zero runtime HTTP deps**; strict TS + ESM; passes on Node 22/24 (`engines` `>=22.12`, the floor of the pinned `commander`).
 - **Exit codes** (`run.ts`): help/version → 0; usage → 2; 404 → 4; network → 6; other → 1.
   The bin shim installs `handleOutputErrors()` (`io.ts`) before `run()`: an EPIPE on
   stdout (`| head`) exits 0 quietly, an EPIPE on stderr is ignored so the run's own code
