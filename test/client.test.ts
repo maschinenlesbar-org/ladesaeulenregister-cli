@@ -397,3 +397,23 @@ test("geojson() rejects a reply that is not a FeatureCollection with a features 
   const { client } = clientFor({ type: "FeatureCollection", features: [] });
   assert.deepEqual(await client.geojson(), { type: "FeatureCollection", features: [] });
 });
+
+test("layerInfo() reads the layer's edit dates as ISO 8601 (the register's as-of date)", async () => {
+  const layer = {
+    name: "Ladesaeulen_einfach",
+    maxRecordCount: 2000,
+    editingInfo: { lastEditDate: 1790862802139, schemaLastEditDate: 1790862802139, dataLastEditDate: 1790862802139 },
+    fields: [{ name: "ID", type: "esriFieldTypeString", alias: "ID" }],
+  };
+  const { client, mt } = clientFor(layer);
+  assert.deepEqual(await client.layerInfo(), {
+    name: "Ladesaeulen_einfach",
+    lastEditDate: "2026-10-01T13:53:22.139Z",
+    dataLastEditDate: "2026-10-01T13:53:22.139Z",
+    maxRecordCount: 2000,
+  });
+  assert.equal(new URL(mt.last().url).pathname.endsWith("/0"), true);
+  const bare = clientFor({ fields: [] });
+  assert.deepEqual(await bare.client.layerInfo(), { name: null, lastEditDate: null, dataLastEditDate: null, maxRecordCount: null });
+  await assert.rejects(clientFor({ name: "x" }).client.layerInfo(), LadesaeulenParseError);
+});

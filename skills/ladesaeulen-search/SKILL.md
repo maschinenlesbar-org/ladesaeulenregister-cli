@@ -71,6 +71,9 @@ ladesaeulen stations --count
 ## Traps
 
 - **Prefer `--count` for "how many?"** — never page through the whole register to count.
+- **Say how current the answer is.** The register is a snapshot, refreshed irregularly,
+  and no row carries a date: run `ladesaeulen info` once and give its `dataLastEditDate`
+  ("as of 1 October 2026") with every count.
 - **`stations` returns `{ features, exceededTransferLimit }`.** If
   `exceededTransferLimit` is `true`, more matched than were returned — page with
   `--limit`/`--offset` (or narrow the `--where`).

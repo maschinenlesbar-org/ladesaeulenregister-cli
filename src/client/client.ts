@@ -22,6 +22,7 @@ import type {
   Feature,
   FieldInfo,
   GeoJsonFeatureCollection,
+  LayerInfo,
   StationPage,
   StationQuery,
 } from "./types.js";
@@ -123,6 +124,13 @@ function featureList(features: unknown, path: string): Feature[] {
     }
   });
   return features as Feature[];
+}
+
+/** An ArcGIS epoch-milliseconds date as ISO 8601, or null for anything else. */
+function isoDate(value: unknown): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 /** `outFields` plus the columns `max_charge_point_kw` is read from (unless it is `*`). */
@@ -476,6 +484,30 @@ export class LadesaeulenClient {
 
   /** The layer's field metadata (names/types/aliases) — for building queries. */
   async fields(): Promise<FieldInfo[]> {
+    return (await this.layer()).fields;
+  }
+
+  /**
+   * How current the register is, from the layer's own metadata: the layer name and its
+   * `editingInfo` dates as ISO 8601 strings (`lastEditDate`, `dataLastEditDate`; `null`
+   * when the server sends none). No row carries an as-of date (`documentDate` is always
+   * empty), so this is the date to cite with an answer. One request, like `fields()`.
+   */
+  async layerInfo(): Promise<LayerInfo> {
+    const { doc } = await this.layer();
+    const editing = isObject(doc["editingInfo"]) ? doc["editingInfo"] : {};
+    const name = doc["name"];
+    const maxRecordCount = doc["maxRecordCount"];
+    return {
+      name: typeof name === "string" ? name : null,
+      lastEditDate: isoDate(editing["lastEditDate"]),
+      dataLastEditDate: isoDate(editing["dataLastEditDate"]),
+      maxRecordCount: typeof maxRecordCount === "number" && Number.isSafeInteger(maxRecordCount) ? maxRecordCount : null,
+    };
+  }
+
+  /** The layer document (`/0?f=json`), checked: an object with a `fields` array of named fields. */
+  private async layer(): Promise<{ doc: Record<string, unknown>; fields: FieldInfo[] }> {
     const res = await this.get<{ fields?: FieldInfo[]; error?: { code?: number; message?: string } }>(
       LAYER,
       { f: "json" },
@@ -488,6 +520,6 @@ export class LadesaeulenClient {
         throw shapeError(LAYER, `every field to be a JSON object with a string name, field ${i} ${what}`);
       }
     });
-    return fields as FieldInfo[];
+    return { doc: res as Record<string, unknown>, fields: fields as FieldInfo[] };
   }
 }

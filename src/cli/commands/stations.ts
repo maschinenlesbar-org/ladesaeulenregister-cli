@@ -175,6 +175,15 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     );
 
   program
+    .command("info")
+    .description("Show how current the register is: the layer's name and last edit dates (cite dataLastEditDate)")
+    .action(
+      action(deps, async ({ client, global }) => {
+        renderJson(deps, global, await client.layerInfo());
+      }),
+    );
+
+  program
     .command("fields")
     .description("List the queryable field names (for --where / --fields / count-by)")
     .action(

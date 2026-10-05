@@ -378,3 +378,16 @@ test("--geojson exits 1 with a parse error for a reply that is not a FeatureColl
     assert.match(cli.err.join("\n"), /Unexpected response shape from \/0\/query: expected a/);
   }
 });
+
+test("info prints the layer's name and edit dates", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ name: "Ladesaeulen_einfach", editingInfo: { lastEditDate: 1790862802139, dataLastEditDate: 1790862802139 }, fields: [] }),
+  );
+  assert.equal(await run(["--compact", "info"], cli.deps), 0);
+  assert.deepEqual(JSON.parse(cli.out.join("")), {
+    name: "Ladesaeulen_einfach",
+    lastEditDate: "2026-10-01T13:53:22.139Z",
+    dataLastEditDate: "2026-10-01T13:53:22.139Z",
+    maxRecordCount: null,
+  });
+});

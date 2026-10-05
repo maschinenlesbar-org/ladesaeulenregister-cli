@@ -23,7 +23,8 @@ They compose: **search → near**, or **search → stats**.
   `--min-point-kw N` and its `max_charge_point_kw` per charge point; filter and group operators
   on `operator_companyName`, since `Betreiber` is often `null`; `--near` needs `lat,lon` coordinates (this
   CLI does not geocode); a `true` `exceededTransferLimit` means page with
-  `--limit`/`--offset`; use `--count`/`count-by` for totals rather than paging.
+  `--limit`/`--offset`; use `--count`/`count-by` for totals rather than paging;
+  `ladesaeulen info` gives the date the data was last edited, to cite with an answer.
 
 ## Installing the plugin
 

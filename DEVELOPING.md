@@ -189,6 +189,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - The layer has ~60 columns incl. per-charge-point connector fields and a large
   `F_response_body` JSON blob → the client ships a **curated `DEFAULT_FIELDS`**; the
   CLI's `--fields '*'` returns everything.
+- **The as-of date is the layer's `editingInfo`** (`/0?f=json`); no row carries one
+  (`documentDate` and `json_type` are always `null`). `layerInfo()` (`ladesaeulen info`)
+  returns the name, `lastEditDate`, `dataLastEditDate` (epoch ms → ISO 8601) and
+  `maxRecordCount`, from the same request `fields()` makes. The layer is refreshed
+  irregularly (last edit 2026-10-01 when checked on 2026-10-05).
 - Coordinates are in `coordinates_latitude`/`coordinates_longitude` (and the geometry).
   `stations()` requests `returnGeometry=false` for lean JSON; `--geojson` returns full
   geometry.

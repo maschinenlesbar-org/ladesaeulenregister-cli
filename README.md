@@ -41,6 +41,7 @@ ladesaeulen stations --where "state='Bayern'" --limit 20       # a page of stati
 ladesaeulen stations --geojson --limit 200 > stations.geojson  # GeoJSON for a map
 ladesaeulen count-by state                                     # stations per Bundesland
 ladesaeulen fields                                             # the queryable columns
+ladesaeulen info                                               # how current the data is (last edit date)
 ```
 
 - **`stations`** searches with an SQL `--where`, paging (`--limit`/`--offset`),
@@ -48,6 +49,8 @@ ladesaeulen fields                                             # the queryable c
   and `--count` (just the number) or `--geojson` output.
 - **`count-by <field>`** aggregates (e.g. per `state`, `Typ`, `operator_companyName`).
 - **`fields`** lists the queryable columns (build `--where`/`--fields`/`count-by`).
+- **`info`** prints the layer's last edit date (`dataLastEditDate`), the register's as-of
+  date: the data is a snapshot, refreshed irregularly, and no row carries a date.
 
 Filter values are **SQL, single-quoted** (`Ort='Berlin'`); text comparisons ignore case. `max_electric_power_station` is
 the operator's figure for the whole station — often the **sum** of its charge points (2 × 160 kW

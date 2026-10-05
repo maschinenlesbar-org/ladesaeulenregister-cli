@@ -54,6 +54,13 @@ map.
 groups (the server's page limit; the CLI then prints a stderr note); the top groups are
 still correct because the server sorts by count first.
 
+### `info` — how current the data is
+
+`ladesaeulen info` → `{ name, lastEditDate, dataLastEditDate, maxRecordCount }`, the
+layer's own metadata; the dates are ISO 8601 UTC (`"2026-10-01T13:53:22.139Z"`). The register
+is a snapshot, refreshed irregularly, and no row carries an as-of date (`documentDate` is
+always empty), so cite `dataLastEditDate` with an answer.
+
 ### `fields` — list queryable columns
 
 `ladesaeulen fields` → `[{ name, type, alias }, …]`. Use it to build `--where`,

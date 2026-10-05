@@ -111,6 +111,18 @@ export interface GeoJsonFeatureCollection {
   [key: string]: unknown;
 }
 
+/** How current the register is: the layer's own metadata (`layerInfo()`, `ladesaeulen info`). */
+export interface LayerInfo {
+  /** The layer's name (`Ladesaeulen_einfach`). */
+  name: string | null;
+  /** When the layer was last edited (schema or data), ISO 8601 UTC; null if not sent. */
+  lastEditDate: string | null;
+  /** When the layer's data was last edited, ISO 8601 UTC; null if not sent. Cite this as the "as of" date. */
+  dataLastEditDate: string | null;
+  /** Most rows the server returns per request (2000). */
+  maxRecordCount: number | null;
+}
+
 /** A page of stations — what the client returns from a feature query. */
 export interface StationPage {
   features: Feature[];

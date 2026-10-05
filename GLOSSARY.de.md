@@ -22,6 +22,7 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 | **`--near` / `--radius`** | Optionen | Räumliche Abfrage: Ladeeinrichtungen im Umkreis von `radius` km um einen Punkt `lat,lon`. |
 | **`exceededTransferLimit`** | Ausgabefeld | `true` ⇒ es passten mehr Features, als zurückgegeben wurden; blättern Sie mit `--limit`/`--offset`. |
 | **`count-by`** | Befehl | Serverseitig gruppierte Zählungen (`outStatistics`), z. B. Ladeeinrichtungen je `state`. |
+| **`info`** | Befehl | Wie aktuell das Register ist: Name des Layers und seine letzten Bearbeitungsdaten (`dataLastEditDate`, ISO 8601). |
 
 ## Die Daten lesen
 
@@ -44,5 +45,8 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
   Monat mit `LIKE '%.2026'` / `LIKE '%.08.2026'`, statt zu sortieren.
 - **Gezählt werden Ladeeinrichtungen, nicht Ladepunkte** – eine Ladeeinrichtung kann mehrere
   Ladepunkte haben (`Anzahl_Ladepunkte`); machen Sie deutlich, welche Zahl gefragt ist.
-- **Das Register ist eine Momentaufnahme**, die regelmäßig (etwa täglich) aktualisiert wird;
-  die Zahlen verschieben sich.
+- **Das Register ist eine Momentaufnahme und wird unregelmäßig aktualisiert.** Keine Zeile trägt
+  ein Stand-Datum (`documentDate` ist in jeder Zeile leer); das einzige Datum ist das Bearbeitungsdatum
+  des Layers, das `ladesaeulen info` ausgibt (`dataLastEditDate`). Am 05.10.2026 war der Layer zuletzt
+  am 01.10.2026 bearbeitet worden, und im September blieb seine Gesamtzahl mindestens 11 Tage gleich;
+  der CSV-Download der Bundesnetzagentur erscheint monatlich. Nennen Sie das Datum zu jeder Zahl.

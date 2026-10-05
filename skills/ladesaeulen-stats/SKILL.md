@@ -60,6 +60,9 @@ echo "fast: $fast / total: $total"
 
 ## Traps
 
+- **Say how current the answer is.** The register is a snapshot, refreshed irregularly,
+  and no row carries a date: run `ladesaeulen info` once and give its `dataLastEditDate`
+  ("as of 1 October 2026") with the totals.
 - **`count-by` is server-side aggregation** — it counts all matching stations, not
   just a page, so it is exact and cheap. Prefer it over paging + counting yourself.
 - **Group by one real column** — confirm the field name with `ladesaeulen fields`

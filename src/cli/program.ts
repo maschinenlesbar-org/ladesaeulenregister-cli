@@ -47,7 +47,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
         "charging stations in Germany (over 100k Ladeeinrichtungen). No API key needed. " +
         "`stations` searches with an SQL --where, paging, spatial --near/--radius, --count " +
         "or --geojson; `count-by` aggregates (e.g. per Bundesland); `fields` lists the " +
-        "queryable columns.",
+        "queryable columns; `info` shows when the data was last edited.",
     )
     .version(VERSION)
     .option(

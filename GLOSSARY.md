@@ -22,6 +22,7 @@ data are German (with umlauts); keep them verbatim in `--where`.
 | **`--near` / `--radius`** | options | Spatial query: stations within `radius` km of a `lat,lon` point. |
 | **`exceededTransferLimit`** | output field | `true` ⇒ more features matched than were returned; page with `--limit`/`--offset`. |
 | **`count-by`** | command | Server-side grouped counts (`outStatistics`), e.g. stations per `state`. |
+| **`info`** | command | How current the register is: the layer's name and its last edit dates (`dataLastEditDate`, ISO 8601). |
 
 ## Reading the data
 
@@ -44,4 +45,8 @@ data are German (with umlauts); keep them verbatim in `--where`.
   `LIKE '%.2026'` / `LIKE '%.08.2026'` instead of sorting.
 - **It counts stations, not charge points** — a station may host several
   `Anzahl_Ladepunkte`; be explicit about which the user asked for.
-- **The register is a snapshot** refreshed regularly (roughly daily); counts drift.
+- **The register is a snapshot, refreshed irregularly.** No row carries an as-of date
+  (`documentDate` is empty on every row); the layer's own edit date is the only one, and
+  `ladesaeulen info` prints it (`dataLastEditDate`). On 2026-10-05 the layer had last been
+  edited on 2026-10-01, and in September its total stayed unchanged for at least 11 days;
+  the BNetzA's own CSV download is monthly. Give the date with every count.
