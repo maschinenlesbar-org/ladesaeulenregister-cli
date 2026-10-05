@@ -40,7 +40,7 @@ Run `ladesaeulen fields` for the full list. The useful ones:
 | `operator_companyName` | operator company name, filled on every station — `operator_companyName LIKE '%EnBW%'` |
 | `Betreiber` | short operator name, **`null` on more than half of all stations** — don't filter or group on it |
 | `Typ` | `'Normalladeeinrichtung'` or `'Schnellladeeinrichtung'` (more than 22 kW — not the same as DC) |
-| `Steckersystem_Ladepunkt1..10` | connector per charge point — `Steckersystem_Ladepunkt1 LIKE '%DC%'` for DC |
+| `Steckersystem_Ladepunkt1..6` | connector per charge point, with its rating (`… (150 kw)`) — for DC, OR **all six** (recipe below); point 1 alone misses ~6 % (7..10 are always empty) |
 | `Status` | `'In Betrieb'`, … |
 | `max_electric_power_station` | the operator's figure for the **whole station** in kW, **stored as text** (`"150"`, `"3.7"`) — often the **sum** of the charge points, so not what a car gets; `CAST(max_electric_power_station AS FLOAT) >= 150` |
 | `max_charge_point_kw` | **derived, not a column:** the most one charge point delivers (fastest connector rating, capped at the station figure); filter with `--min-point-kw N`, which adds it to every row |
@@ -63,6 +63,9 @@ ladesaeulen stations --where "Ort='München'" --min-point-kw 300 --limit 200 --c
 
 # How many stations nationwide have a charge point of at least 150 kW?
 ladesaeulen stations --min-point-kw 150 --count   # reads every candidate: one request per 2,000
+
+# DC stations in Hamburg: the connector columns of all six charge points, ORed in parentheses
+ladesaeulen stations --where "Ort='Hamburg' AND (Steckersystem_Ladepunkt1 LIKE '%DC%' OR Steckersystem_Ladepunkt2 LIKE '%DC%' OR Steckersystem_Ladepunkt3 LIKE '%DC%' OR Steckersystem_Ladepunkt4 LIKE '%DC%' OR Steckersystem_Ladepunkt5 LIKE '%DC%' OR Steckersystem_Ladepunkt6 LIKE '%DC%')" --count
 
 # Stations in the register (not every public charger in Germany: see Traps)
 ladesaeulen stations --count
@@ -103,9 +106,10 @@ ladesaeulen stations --count
   Check a column's `type` in `ladesaeulen fields` before comparing it with a number.
 - **"Fast" is not "DC".** `Typ='Schnellladeeinrichtung'` means a charge point above
   22 kW (the Ladesäulenverordnung's definition); 48 fast stations had only AC connectors
-  on 2026-09-26. When the user asks for DC chargers, filter on the connector columns
-  (`Steckersystem_Ladepunkt1 LIKE '%DC%'`, and the other `Steckersystem_Ladepunkt*`
-  columns for multi-point stations) and say which definition you used.
+  on 2026-09-26. When the user asks for DC chargers (or CCS, CHAdeMO), filter on the
+  connector columns of **all six** charge points, ORed and in parentheses (the table
+  above), and say which definition you used: point 1 alone counted 30,798 DC stations
+  where all points give 32,825 (2026-10-06).
 - **Don't sort by `go_live_date` for "newest stations".** It is `dd.mm.yyyy` text, so
   `--order-by "go_live_date DESC"` puts `31.12.2025` first although 9,697 stations went
   live in 2026 (on 2026-09-26). Filter by year or month instead

@@ -38,8 +38,9 @@ data are German (with umlauts); keep them verbatim in `--where`.
 - **`Typ` is about power, not AC versus DC.** It follows the Ladesäulenverordnung: a
   `Schnellladeeinrichtung` has a charge point with more than 22 kW. Most of them are DC,
   but not all — 48 fast stations had no DC connector on 2026-09-26 (e.g. AC Typ 2 at
-  25 kW). For "DC chargers", filter on the connector columns, e.g.
-  `Steckersystem_Ladepunkt1 LIKE '%DC%'`.
+  25 kW). For "DC chargers", filter on the connector columns of **every** charge point,
+  `(Steckersystem_Ladepunkt1 LIKE '%DC%' OR Steckersystem_Ladepunkt2 LIKE '%DC%' OR … OR Steckersystem_Ladepunkt6 LIKE '%DC%')`, in parentheses when combined with `AND`. Point 1 alone misses about 6 %: 30,798
+  stations have DC on point 1, 32,825 on any point (2026-10-06).
 - **`go_live_date` is `dd.mm.yyyy` text**, so `--order-by "go_live_date DESC"` returns
   `31.12.2025` first although stations went live in 2026. Filter by year or month with
   `LIKE '%.2026'` / `LIKE '%.08.2026'` instead of sorting.

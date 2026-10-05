@@ -39,7 +39,9 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
   Ladesäulenverordnung: Eine `Schnellladeeinrichtung` hat einen Ladepunkt mit mehr als 22 kW.
   Die meisten davon laden mit Gleichstrom, aber nicht alle – 48 Schnellladeeinrichtungen hatten am
   26.09.2026 keinen DC-Anschluss (z. B. AC Typ 2 mit 25 kW). Für „DC-Lader“ filtern Sie nach den
-  Steckerspalten, z. B. `Steckersystem_Ladepunkt1 LIKE '%DC%'`.
+  Steckerspalten **aller** Ladepunkte, `(Steckersystem_Ladepunkt1 LIKE '%DC%' OR Steckersystem_Ladepunkt2 LIKE '%DC%' OR … OR Steckersystem_Ladepunkt6 LIKE '%DC%')`, in Klammern, wenn Sie mit `AND` kombinieren.
+  Ladepunkt 1 allein verfehlt etwa 6 %: 30.798 Ladeeinrichtungen haben DC an Ladepunkt 1, 32.825 an
+  irgendeinem Ladepunkt (06.10.2026).
 - **`go_live_date` ist Text im Format `tt.mm.jjjj`**, daher liefert `--order-by "go_live_date DESC"`
   zuerst `31.12.2025`, obwohl 2026 Ladeeinrichtungen in Betrieb gingen. Filtern Sie nach Jahr oder
   Monat mit `LIKE '%.2026'` / `LIKE '%.08.2026'`, statt zu sortieren.
