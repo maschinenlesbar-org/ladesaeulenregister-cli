@@ -71,7 +71,9 @@ export const headerNameProblem: Problem<string> = (name) =>
  * the raw string, so a `?` or `#` would swallow every path (`http://h/fs?x=1`
  * requests `/fs?x=1/0/query?...`, `http://h/fs#f` requests `/fs` with no
  * parameters), and surrounding whitespace, which `new URL()` trims silently, would
- * end up in every request URL (`/fs%20/0/query`).
+ * end up in every request URL (`/fs%20/0/query`). A `%` in the user name or password must
+ * start a valid escape (`%25` for a literal one). The reasons never echo the value, so a
+ * credential in it cannot leak into a message.
  */
 export const baseUrlProblem: Problem<string> = (raw) => {
   if (typeof raw !== "string") return `Expected a string, got ${show(raw)}.`;
@@ -88,6 +90,15 @@ export const baseUrlProblem: Problem<string> = (raw) => {
   }
   if (/[?#]/.test(raw)) return "A base URL cannot have a query (?) or fragment (#).";
   if (raw !== trimmed) return "A base URL cannot have surrounding whitespace.";
+  // Node decodes the userinfo into the Authorization header and throws "URI malformed" for a
+  // "%" that isn't an escape — at request time, as a network error (exit 6). Reject it here.
+  for (const part of [url.username, url.password]) {
+    try {
+      decodeURIComponent(part);
+    } catch {
+      return 'The user name or password has a "%" that is not followed by two hex digits; write a literal "%" as %25.';
+    }
+  }
   return undefined;
 };
 

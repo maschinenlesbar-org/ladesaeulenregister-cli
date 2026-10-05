@@ -104,8 +104,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `assertHeaderValue`). `--user-agent` runs the same rule. The default transport
   turns Node's own synchronous header error into a `LadesaeulenNetworkError`.
   The base URL is checked raw, before the trailing-slash strip (`validateBaseUrl`,
-  `baseUrlProblem`): blank, unparsable, not `http:`/`https:`, a query or fragment, or
-  surrounding whitespace (the engine appends request paths to the raw string) is a
+  `baseUrlProblem`): blank, unparsable, not `http:`/`https:`, a query or fragment,
+  surrounding whitespace (the engine appends request paths to the raw string), or a `%`
+  in the user name or password that doesn't start an escape (Node decodes the userinfo
+  for the Authorization header and failed at request time with "URI malformed", exit 6;
+  a literal `%` is `%25`) is a
   `LadesaeulenValidationError` (`Invalid baseUrl: …`), not a network error.
   `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
   transport's per-hop scheme check and real transport failures.
