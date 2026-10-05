@@ -19,6 +19,8 @@ import {
   LadesaeulenError,
   LadesaeulenNetworkError,
   LadesaeulenParseError,
+  credentialsIn,
+  redactCredentials,
   redactUrl,
 } from "./errors.js";
 
@@ -280,7 +282,12 @@ const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 export class RequestEngine {
-  private readonly baseUrl: string;
+  // A real private field (not TypeScript's `private`): util.inspect, console.log and
+  // JSON.stringify of a client never show it, so a password in the base URL can't be
+  // logged by accident. Messages use redactUrl.
+  readonly #baseUrl: string;
+  /** The base URL's userinfo, raw and percent-decoded, for scrubbing server and transport text. */
+  readonly #credentials: string[];
   private readonly transport: Transport;
   private readonly userAgent: string;
   private readonly defaultHeaders: Record<string, string>;
@@ -292,7 +299,14 @@ export class RequestEngine {
 
   constructor(options: EngineOptions = {}) {
     // Checked raw, before the trailing-slash strip (see validateBaseUrl).
-    this.baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
+    this.#baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
+    this.#credentials = credentialsIn(this.#baseUrl).flatMap((raw) => {
+      try {
+        return [raw, decodeURIComponent(raw)];
+      } catch {
+        return [raw];
+      }
+    });
     this.transport = options.transport ?? nodeHttpTransport;
     // Header values are checked up front: a blank one would be sent as is, and a
     // CR/LF or a character above U+00FF would reach a custom transport raw or make
@@ -319,7 +333,55 @@ export class RequestEngine {
   buildUrl(path: string, query?: QueryParams): string {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
     const qs = query ? buildQueryString(query) : "";
-    return `${this.baseUrl}${normalizedPath}${qs ? `?${qs}` : ""}`;
+    return `${this.#baseUrl}${normalizedPath}${qs ? `?${qs}` : ""}`;
+  }
+
+  /**
+   * `text` without the base URL's credentials: server text (an error body that echoes the
+   * request URL) and transport text (fetch's "Request cannot be constructed from a URL that
+   * includes credentials: <url>") can carry them.
+   */
+  scrub(text: string): string {
+    return this.#credentials.length === 0 ? text : redactCredentials(text, this.#credentials);
+  }
+
+  /**
+   * A transport failure as the `cause` of the error the engine raises: the original when its
+   * text carries no credentials, otherwise a copy with them scrubbed (message, `code` and the
+   * cause chain kept), so logging the error with its causes can't reveal the base URL's
+   * password.
+   */
+  private scrubCause(cause: unknown, depth = 0): unknown {
+    if (this.#credentials.length === 0 || depth > 5) return cause;
+    if (typeof cause === "string") return this.scrub(cause);
+    if (!(cause instanceof Error)) return cause;
+    const inner = this.scrubCause(cause.cause, depth + 1);
+    const message = this.scrub(cause.message);
+    if (message === cause.message && inner === cause.cause && !this.scrub(cause.stack ?? "").includes("***@")) return cause;
+    const copy = new Error(message, inner === undefined ? undefined : { cause: inner });
+    copy.name = cause.name;
+    const code = (cause as { code?: unknown }).code;
+    if (code !== undefined) Object.assign(copy, { code });
+    return copy;
+  }
+
+  /**
+   * The error for an ArcGIS "HTTP 200 + `error`" envelope (a bad `where`, "Token
+   * Required"): a LadesaeulenApiError with `arcgisCode` set, naming the request the
+   * engine sent for `path` + `query` (URL redacted), with the server text stripped of
+   * control characters and of the base URL's credentials.
+   */
+  envelopeError(path: string, query: QueryParams, envelope: unknown, error: unknown): LadesaeulenApiError {
+    const e = error !== null && typeof error === "object" ? (error as { code?: unknown }) : {};
+    const detail = describeArcGisError(error);
+    const target = this.requestTarget(path, query);
+    return new LadesaeulenApiError({
+      url: target.url,
+      method: target.method,
+      body: this.scrub(JSON.stringify(envelope)),
+      arcgisCode: typeof e.code === "number" ? e.code : undefined,
+      ...(detail === undefined ? {} : { detail: this.scrub(detail) }),
+    });
   }
 
   /**
@@ -369,9 +431,17 @@ export class RequestEngine {
    * LadesaeulenError. Any other LadesaeulenError passes through.
    */
   private toNetworkError(method: string, url: string, cause: unknown): LadesaeulenError {
-    if (cause instanceof LadesaeulenError) return cause;
+    if (cause instanceof LadesaeulenError && !(cause instanceof LadesaeulenNetworkError)) return cause;
+    if (cause instanceof LadesaeulenNetworkError) {
+      // The default transport's own errors carry no URL; scrub one that does anyway.
+      const scrubbed = this.scrubCause(cause);
+      if (scrubbed === cause) return cause;
+      return new LadesaeulenNetworkError(this.scrub(cause.message), { cause: this.scrubCause(cause.cause) });
+    }
     const reason = cause instanceof Error ? cause.message : String(cause);
-    return new LadesaeulenNetworkError(`${method} ${redactUrl(url)} failed: ${sanitizeServerText(reason)}`, { cause });
+    return new LadesaeulenNetworkError(`${method} ${redactUrl(url)} failed: ${sanitizeServerText(this.scrub(reason))}`, {
+      cause: this.scrubCause(cause),
+    });
   }
 
   /**
@@ -466,7 +536,7 @@ export class RequestEngine {
   }
 
   private toApiError(method: string, url: string, status: number, body: Buffer): LadesaeulenApiError {
-    const text = body.toString("utf8");
+    const text = this.scrub(body.toString("utf8"));
     let detail: string | undefined;
     try {
       const parsed = JSON.parse(text) as {

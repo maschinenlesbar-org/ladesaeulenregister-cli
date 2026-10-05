@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { inspect } from "node:util";
+import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import { LadesaeulenClient, DEFAULT_FIELDS } from "../src/client/client.js";
 import {
   LadesaeulenApiError,
@@ -342,4 +344,38 @@ test("the client validates its query before any request (LadesaeulenValidationEr
     );
     assert.equal(mt.calls.length, 0, label);
   }
+});
+
+test("the base URL's password reaches no ArcGIS error, on GET or POST, through the library or the CLI", async () => {
+  const { run } = await import("../src/cli/run.js");
+  const pw = "Tr0nk3t!";
+  const base = `http://deploy:${pw}@mirror.example/fs`;
+  const envelope = (req: HttpRequest): HttpResponse =>
+    jsonResponse({ error: { code: 400, message: "Unable to perform query.", details: [`bad where in ${req.url}`] } });
+  const statuses = [404, 500, 302];
+  for (const where of ["1=1", `ID IN (${Array.from({ length: 400 }, (_, i) => `'${i}'`).join(",")})`]) {
+    const mt = makeMockTransport(envelope);
+    const client = new LadesaeulenClient({ baseUrl: base, transport: mt.transport });
+    const err = await client.count({ where }).catch((e: unknown) => e);
+    assert.ok(err instanceof LadesaeulenApiError);
+    const text = `${err.message} ${err.url} ${err.body} ${JSON.stringify(err)} ${inspect(err)}`;
+    assert.ok(!text.includes(pw), text);
+    assert.match(err.message, /for (GET|POST) http:\/\/\*\*\*@mirror\.example\/fs\/0\/query/);
+  }
+  for (const status of statuses) {
+    const mt = makeMockTransport(() => jsonResponse({ message: "nope" }, status));
+    const err = await new LadesaeulenClient({ baseUrl: base, transport: mt.transport, maxRetries: 0 }).count().catch((e: unknown) => e);
+    assert.ok(err instanceof LadesaeulenApiError && !`${err.message}${err.url}`.includes(pw), String(err));
+  }
+  // The CLI path (result 03 bug 1): exit 1 with the URL redacted.
+  const out: string[] = [];
+  const errs: string[] = [];
+  const mt = makeMockTransport(envelope);
+  const code = await run(["--base-url", base, "stations", "--count"], {
+    io: { out: (s) => out.push(s), err: (s) => errs.push(s) },
+    createClient: (opts) => new LadesaeulenClient({ ...opts, transport: mt.transport }),
+  });
+  assert.equal(code, 1);
+  assert.ok(!errs.join("\n").includes(pw), errs.join("\n"));
+  assert.match(errs.join("\n"), /ArcGIS error 400 for GET http:\/\/\*\*\*@mirror\.example/);
 });

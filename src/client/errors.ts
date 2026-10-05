@@ -88,8 +88,10 @@ export class LadesaeulenApiError extends LadesaeulenError {
   readonly status: number | undefined;
   readonly arcgisCode: number | undefined;
   readonly detail: string | undefined;
+  /** The request URL, userinfo redacted (`https://***@host/…`). */
   readonly url: string;
   readonly method: string;
+  /** The response body as text (the base URL's credentials scrubbed by the engine). */
   readonly body: string;
 
   constructor(args: {
@@ -105,10 +107,12 @@ export class LadesaeulenApiError extends LadesaeulenError {
       args.status !== undefined
         ? `HTTP ${args.status}`
         : `ArcGIS error${args.arcgisCode !== undefined ? ` ${args.arcgisCode}` : ""}`;
-    super(`${head} for ${args.method} ${args.url}${detailPart}`);
+    // The URL is shown without userinfo: a credential in the base URL must not leak.
+    const url = redactUrl(args.url);
+    super(`${head} for ${args.method} ${url}${detailPart}`);
     this.status = args.status;
     this.arcgisCode = args.arcgisCode;
-    this.url = args.url;
+    this.url = url;
     this.method = args.method;
     this.body = args.body;
     this.detail = args.detail;

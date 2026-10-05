@@ -10,8 +10,8 @@
 //   await c.countBy("state");            // stations per Bundesland
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
-import { RequestEngine, describeArcGisError, type EngineOptions } from "./engine.js";
-import { LadesaeulenApiError, LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
+import { RequestEngine, type EngineOptions } from "./engine.js";
+import { LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import { assertValid, countQueryProblem } from "./validate.js";
 import type {
@@ -223,18 +223,10 @@ export class LadesaeulenClient {
     const err: unknown = res.error;
     if (err) {
       // The ArcGIS `error` message/details come from the (attacker-controllable)
-      // response body and flow into an Error.message printed raw to stderr; strip
-      // control characters so a hostile endpoint cannot inject terminal escapes.
-      const e = typeof err === "object" ? (err as { code?: unknown }) : {};
-      const detail = describeArcGisError(err);
-      const target = this.engine.requestTarget(path, params);
-      throw new LadesaeulenApiError({
-        url: target.url,
-        method: target.method,
-        body: JSON.stringify(res),
-        arcgisCode: typeof e.code === "number" ? e.code : undefined,
-        detail,
-      });
+      // response body and flow into an Error.message printed raw to stderr; the
+      // engine strips control characters (so a hostile endpoint cannot inject
+      // terminal escapes) and the base URL's credentials, and redacts the URL.
+      throw this.engine.envelopeError(path, params, res, err);
     }
     return res;
   }

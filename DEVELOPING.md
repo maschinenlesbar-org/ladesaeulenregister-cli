@@ -118,6 +118,14 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
   `test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
   nine argv positions.
+  **The library keeps them out too:** the engine holds the base URL in a real `#private`
+  field (so `console.log(client)`, `util.inspect` and `JSON.stringify` never show it),
+  every error names the request URL through `redactUrl` (`LadesaeulenApiError.url` and
+  `.message` read `http://***@host/…`, on the ArcGIS `error` envelope, an HTTP error and
+  the POST path alike), and server or transport text that echoes the URL — an error
+  body, `detail`, a transport's error message and its `cause` chain — has the userinfo
+  (raw and percent-decoded) scrubbed. `test/conformance-p2-library-redaction.test.ts`
+  checks the client, nine failing transports and five rejected base URLs.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,

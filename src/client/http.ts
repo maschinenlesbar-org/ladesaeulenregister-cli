@@ -8,7 +8,7 @@
 
 import http from "node:http";
 import https from "node:https";
-import { LadesaeulenNetworkError } from "./errors.js";
+import { LadesaeulenNetworkError, redactUrl } from "./errors.js";
 
 export interface HttpRequest {
   method: string;
@@ -72,14 +72,14 @@ export const nodeHttpTransport: Transport = (request) =>
     try {
       url = new URL(request.url);
     } catch {
-      reject(new LadesaeulenNetworkError(`Invalid URL: ${request.url}`));
+      reject(new LadesaeulenNetworkError(`Invalid URL: ${redactUrl(request.url)}`));
       return;
     }
 
     // Only http/https are supported. Reject anything else up front with a clear,
     // typed error instead of letting Node throw an opaque ERR_INVALID_PROTOCOL.
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      reject(new LadesaeulenNetworkError(`Unsupported protocol "${url.protocol}" in URL: ${request.url}`));
+      reject(new LadesaeulenNetworkError(`Unsupported protocol "${url.protocol}" in URL: ${redactUrl(request.url)}`));
       return;
     }
 
