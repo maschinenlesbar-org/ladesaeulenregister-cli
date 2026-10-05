@@ -93,7 +93,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **The client validates its own arguments** before any request (not only the CLI):
   `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
-  non-blank `countBy` field → `LadesaeulenValidationError`
+  non-blank `countBy` field, and no key outside `STATION_QUERY_KEYS` (`where`,
+  `outFields`, `limit`, `offset`, `orderBy`, `near`) or `near`'s `lat`/`lon`/`radiusKm`
+  — a misspelled `wher`, a `Where` or a `__proto__` from JSON used to be dropped and the
+  call answered for every station → `LadesaeulenValidationError`
   (`Invalid <name>: expected <what>, got <value>.`). `count()` also refuses a
   `limit`, `offset`, `orderBy` or `outFields` (`countQueryProblem`, `Invalid count
   query: …`): ArcGIS ignores them next to `returnCountOnly` and returns the full
@@ -147,7 +150,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,
   problem)`, which throws `LadesaeulenValidationError` (`Invalid <name>: <reason>`).
   A rejected input sends no request; `run.ts` maps the error to exit 2
-  (`Error: <message>`).
+  (`Error: <message>`). The CLI makes a single-value option given twice a usage error
+  (`forbidRepeatedOptions` in `shared.ts`): commander kept the last `--where` silently.
+  `test/conformance-p10-strict-filters.test.ts` checks unknown keys, wrong-typed values
+  and repeated options.
 - **The library owns the request defaults.** `stations()`/`geojson()` send `where=1=1`,
   `outFields=DEFAULT_FIELDS` and `resultRecordCount=DEFAULT_LIMIT` (50) when the query
   leaves them out; without a page size the server would send its cap of about 2000

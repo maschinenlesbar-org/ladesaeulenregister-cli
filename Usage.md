@@ -71,7 +71,9 @@ Standard Esri SQL over the layer's columns:
 - `go_live_date` is `dd.mm.yyyy` **text** too, so sorting on it does not find the newest
   stations (`"31.12.2025"` sorts above `"31.08.2026"`); filter by year or month with
   `go_live_date LIKE '%.2026'` or `LIKE '%.08.2026'`
-- combine with `AND`/`OR`; the default is `1=1` (all rows)
+- combine with `AND`/`OR` inside one `--where`; the default is `1=1` (all rows). Giving
+  `--where` (or any other option that takes a value) twice is a usage error (exit 2), not
+  "the last one wins"
 - long filters are fine: when the request URL would pass 2,000 characters (a long
   `IN (…)` list), the CLI sends the query as a form-encoded POST instead of a GET, and an
   error message then reads `… for POST <url>`

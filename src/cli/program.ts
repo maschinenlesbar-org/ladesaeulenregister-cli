@@ -10,7 +10,7 @@ import { defaultIO } from "./io.js";
 import { LadesaeulenClient } from "../client/client.js";
 import { MAX_TIMEOUT_MS } from "../client/http.js";
 import { MAX_RETRIES } from "../client/engine.js";
-import { parseIntArg, parseBoundedInt, parseHeaderValue, parseBaseUrl } from "./shared.js";
+import { forbidRepeatedOptions, parseIntArg, parseBoundedInt, parseHeaderValue, parseBaseUrl } from "./shared.js";
 import { registerCommands } from "./commands/stations.js";
 
 /**
@@ -76,6 +76,7 @@ export function buildProgram(deps: CliDeps = defaultDeps): Command {
     .showHelpAfterError();
 
   registerCommands(program, deps);
+  forbidRepeatedOptions(program);
 
   return program;
 }

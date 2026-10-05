@@ -174,13 +174,37 @@ function checkNumber(name: string, value: unknown, min: number, max: number): vo
   }
 }
 
+/** The keys a `StationQuery` takes; any other key is refused (`checkKeys`). */
+export const STATION_QUERY_KEYS = ["where", "outFields", "limit", "offset", "orderBy", "near"] as const;
+
+/** The keys of `StationQuery.near`. */
+const NEAR_KEYS = ["lat", "lon", "radiusKm"] as const;
+
+/**
+ * Refuse an own key of `value` that is not in `known` — a misspelling (`wher`), another
+ * case (`Where`), `__proto__` from JSON. The client only reads the keys it knows, so such a
+ * key used to be dropped silently and the call answered for every station.
+ */
+function checkKeys(name: string, value: object, known: readonly string[]): void {
+  for (const key of Object.keys(value)) {
+    if (known.includes(key)) continue;
+    const near = known.find((k) => k.toLowerCase() === key.toLowerCase());
+    const hint = near !== undefined ? ` Did you mean "${near}"?` : ` Known keys: ${known.join(", ")}.`;
+    throw new LadesaeulenValidationError(`Invalid ${name}: unknown key ${JSON.stringify(key)}.${hint}`);
+  }
+}
+
 /**
  * A query argument: `undefined` and `null` mean "no options" (`{}`); anything else must
- * be a plain object, else a `LadesaeulenValidationError` rather than a raw TypeError.
+ * be a plain object with only `STATION_QUERY_KEYS`, else a `LadesaeulenValidationError`
+ * rather than a raw TypeError or a silently ignored filter.
  */
 function queryArg(q: unknown): StationQuery {
   if (q === undefined || q === null) return {};
   if (typeof q !== "object" || Array.isArray(q)) throw invalid("query", "an object", Array.isArray(q) ? "an array" : q);
+  checkKeys("query", q, STATION_QUERY_KEYS);
+  const near = (q as { near?: unknown }).near;
+  if (near !== null && typeof near === "object" && !Array.isArray(near)) checkKeys("near", near, NEAR_KEYS);
   return q as StationQuery;
 }
 
