@@ -175,6 +175,17 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).
+- **`max_electric_power_station` is not per car** (result 01 bug 1 of the 2026-10-05
+  review): operators enter the sum of the charge points (Jolt 2 × 160 → 320), the fastest
+  point (4 × 22 → 22) or a station limit below the connectors (EnBW 2 × 300 → 150).
+  `power.ts` reads each charge point's connector ratings from `Steckersystem_LadepunktN`
+  (`… (160 kw)` per line) and derives `max_charge_point_kw` = the fastest rating, capped at
+  the station figure (`maxChargePointKw`). The client adds it to every row that carries a
+  connector column. `StationQuery.minChargePointKw` (`--min-point-kw`) filters on it: the
+  server gets `CAST(max_electric_power_station AS FLOAT) >= n` (exact, because of the cap),
+  the client checks the ratings and adds the connector columns to `outFields`; `count()`
+  pages through the candidates (2,000 per request, `OBJECTID` order). `test/power.test.ts`
+  uses real register rows.
 - The layer has ~60 columns incl. per-charge-point connector fields and a large
   `F_response_body` JSON blob → the client ships a **curated `DEFAULT_FIELDS`**; the
   CLI's `--fields '*'` returns everything.

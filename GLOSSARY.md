@@ -12,9 +12,10 @@ data are German (with umlauts); keep them verbatim in `--where`.
 | **`state`** | filter / `count-by` | Bundesland, e.g. `Bayern`. |
 | **`Ort` / `Postleitzahl` / `Straße` / `Hausnummer`** | fields | City / postcode / street / house number. |
 | **`Status`** | field | Operating status, e.g. `In Betrieb`. |
-| **`max_electric_power_station`** | field | Max electric power of the station, in **kW**, stored as text (`"150"`, `"3.7"`; the column is `esriFieldTypeString`). Compare and sort it with `CAST(max_electric_power_station AS FLOAT)`. |
+| **`max_electric_power_station`** | field | The operator's power figure for the **whole station**, in **kW**, stored as text (`"150"`, `"3.7"`; the column is `esriFieldTypeString`). **Not the power a car can get:** many operators enter the sum of the charge points (2 × 160 kW CCS → `"320"`, 2 × 22 kW AC → `"44"`), others the fastest point (4 × 22 kW → `"22"`), some a station limit below the connectors' rating. Compare and sort it with `CAST(max_electric_power_station AS FLOAT)`. |
+| **`max_charge_point_kw`** | derived field, `--min-point-kw` | Added by the CLI and library, not a register column: the most **one charge point** can deliver — the fastest connector rating in `Steckersystem_Ladepunkt1..10` (`… (160 kw)`), capped at `max_electric_power_station` when that is lower. Present on every row that carries a connector column; `null` when no connector has a rating. `stations --min-point-kw N` filters on it. |
 | **`go_live_date`** | field | Date the station went into operation, stored as **`dd.mm.yyyy` text** (`"31.08.2026"`; `esriFieldTypeString`). Sorting on it sorts the text, day first, so it does not give the newest stations; filter by year or month with `LIKE` (`go_live_date LIKE '%.2026'`, `go_live_date LIKE '%.08.2026'`). |
-| **`Steckersystem_Ladepunkt1..10`** | fields | Connector system per charge point (Typ 2, CCS/Combo, CHAdeMO, Schuko, …). |
+| **`Steckersystem_Ladepunkt1..10`** | fields | Connector system per charge point, one line per connector with its rating: `DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)`, `AC Typ 2 Steckdose (22 kw)\nAC Schuko (22 kw)`; `( kw)` when the operator left the rating empty. The register fills at most six. |
 | **`coordinates_latitude` / `coordinates_longitude`** | fields | WGS84 position (also the feature geometry). |
 | **FeatureServer / layer** | `--base-url` | The ArcGIS service; charging stations are layer `0`. |
 | **`--where`** | option | Esri SQL filter over the columns (case-sensitive, single-quoted strings). |
@@ -24,8 +25,13 @@ data are German (with umlauts); keep them verbatim in `--where`.
 
 ## Reading the data
 
-- **Capacities are in kW.** `max_electric_power_station` is the station maximum. It is a
-  text column: `max_electric_power_station >= 150` fails with an ArcGIS error 400, so write
+- **Capacities are in kW.** `max_electric_power_station` is the operator's figure for the
+  whole station, and operators fill it differently: often the sum of the charge points, so
+  2 × 160 kW reads `320` and 2 × 22 kW reads `44`. In München, 13 of the 49 stations with a
+  figure of 300 kW or more had no charge point above 200 kW (2026-10-05). For "where can a
+  car charge at N kW", use `stations --min-point-kw N` (library: `minChargePointKw`), which
+  reads the connector ratings and adds `max_charge_point_kw`. The station figure is a text
+  column: `max_electric_power_station >= 150` fails with an ArcGIS error 400, so write
   `CAST(max_electric_power_station AS FLOAT) >= 150` (and cast in `--order-by`, which
   otherwise sorts as text).
 - **`Typ` is about power, not AC versus DC.** It follows the Ladesäulenverordnung: a

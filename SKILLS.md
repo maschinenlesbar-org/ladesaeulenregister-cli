@@ -18,8 +18,9 @@ They compose: **search → near**, or **search → stats**.
 - The `ladesaeulen` CLI on PATH: `npm install -g @maschinenlesbar.org/ladesaeulenregister-cli`.
 - **No API key** — the register's public data is open.
 - **Notes:** `--where` is Esri SQL (case-sensitive, single-quoted strings — confirm
-  column names and types with `ladesaeulen fields`); power is a text column, so compare
-  it as `CAST(max_electric_power_station AS FLOAT) >= 150`; filter and group operators
+  column names and types with `ladesaeulen fields`); `max_electric_power_station` is the
+  station's figure, often the sum of its charge points, so "charge at N kW" uses
+  `--min-point-kw N` and its `max_charge_point_kw` per charge point; filter and group operators
   on `operator_companyName`, since `Betreiber` is often `null`; `--near` needs `lat,lon` coordinates (this
   CLI does not geocode); a `true` `exceededTransferLimit` means page with
   `--limit`/`--offset`; use `--count`/`count-by` for totals rather than paging.

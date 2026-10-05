@@ -4,7 +4,7 @@ description: >
   Find and count public EV charging stations in Germany from the Bundesnetzagentur
   Ladesäulenregister using the ladesaeulenregister-cli. Trigger when the user asks
   "how many fast chargers are in Berlin?", "list EnBW charging stations in Bavaria",
-  "charging stations with at least 150 kW", "how many public chargers exist in
+  "where can I charge at 300 kW in Munich?", "how many public chargers exist in
   Germany?", or wants to filter stations by place, operator, connector type, power
   or status. Builds the SQL --where filter and resolves the field names.
 compatibility: >
@@ -42,7 +42,8 @@ Run `ladesaeulen fields` for the full list. The useful ones:
 | `Typ` | `'Normalladeeinrichtung'` or `'Schnellladeeinrichtung'` (more than 22 kW — not the same as DC) |
 | `Steckersystem_Ladepunkt1..10` | connector per charge point — `Steckersystem_Ladepunkt1 LIKE '%DC%'` for DC |
 | `Status` | `'In Betrieb'`, … |
-| `max_electric_power_station` | station power in kW, **stored as text** (`"150"`, `"3.7"`) — `CAST(max_electric_power_station AS FLOAT) >= 150` |
+| `max_electric_power_station` | the operator's figure for the **whole station** in kW, **stored as text** (`"150"`, `"3.7"`) — often the **sum** of the charge points, so not what a car gets; `CAST(max_electric_power_station AS FLOAT) >= 150` |
+| `max_charge_point_kw` | **derived, not a column:** the most one charge point delivers (fastest connector rating, capped at the station figure); filter with `--min-point-kw N`, which adds it to every row |
 | `Anzahl_Ladepunkte` | number of charge points, also text (`"2"`) — `CAST(Anzahl_Ladepunkte AS INTEGER) > 2` |
 | `go_live_date` | date it went live, **`dd.mm.yyyy` text** (`"31.08.2026"`) — `go_live_date LIKE '%.2026'` |
 
@@ -56,9 +57,12 @@ ladesaeulen stations --where "Ort='Berlin' AND Typ='Schnellladeeinrichtung'" --c
 ladesaeulen stations --where "state='Bayern' AND operator_companyName LIKE '%EnBW%'" --limit 50 --compact \
   | jq '.features[].attributes | {operator_companyName, Ort, Typ, max_electric_power_station}'
 
-# High-power (≥150 kW) stations, biggest first
-ladesaeulen stations --where "CAST(max_electric_power_station AS FLOAT) >= 150" \
-  --order-by "CAST(max_electric_power_station AS FLOAT) DESC" --limit 20
+# Where in München can a car charge at 300 kW or more? (per charge point, not the station sum)
+ladesaeulen stations --where "Ort='München'" --min-point-kw 300 --limit 200 --compact \
+  | jq '.features[].attributes | {operator_companyName, "Straße": ."Straße", Hausnummer, max_charge_point_kw}'
+
+# How many stations nationwide have a charge point of at least 150 kW?
+ladesaeulen stations --min-point-kw 150 --count   # reads every candidate: one request per 2,000
 
 # Total public charging stations in Germany
 ladesaeulen stations --count
@@ -73,6 +77,15 @@ ladesaeulen stations --count
 - **`--where` is SQL, values are case-sensitive** and single-quoted (`Ort='Berlin'`,
   not `Berlin`). Use `LIKE '%…%'` for partial operator names. Confirm exact field
   names with `ladesaeulen fields`.
+- **`max_electric_power_station` is not the power a car can get.** It is the operator's
+  figure for the whole station, and many operators enter the **sum** of the charge points:
+  Jolt's 2 × 160 kW stations read `320`, 2 × 22 kW AC stations read `44`. In München, 13 of
+  the 49 stations with a figure ≥ 300 had no charge point above 200 kW (2026-10-05). For
+  "charge at N kW", "fast enough for my car" or "at least 150 kW", filter with
+  `--min-point-kw N` and report `max_charge_point_kw` (per charge point), not the station
+  figure. With `--limit`, a page can come back shorter than the limit (rows below the
+  minimum are dropped after the server's page); `--count` reads every candidate, one
+  request per 2,000, so narrow `--where` first for a nationwide question.
 - **Power and charge-point count are text columns.** `ladesaeulen fields` lists
   `max_electric_power_station` and `Anzahl_Ladepunkte` as `esriFieldTypeString`.
   `max_electric_power_station >= 150` fails with `ArcGIS error 400 … Invalid query

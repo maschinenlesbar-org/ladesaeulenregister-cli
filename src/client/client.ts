@@ -14,6 +14,7 @@ import { RequestEngine, type EngineOptions } from "./engine.js";
 import { LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import { assertValid, countQueryProblem } from "./validate.js";
+import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw } from "./power.js";
 import type {
   ArcGisQueryResponse,
   CountByPage,
@@ -124,6 +125,29 @@ function featureList(features: unknown, path: string): Feature[] {
   return features as Feature[];
 }
 
+/** `outFields` plus the columns `max_charge_point_kw` is read from (unless it is `*`). */
+function withPowerFields(outFields: string): string {
+  const fields = outFields.split(",").map((f) => f.trim());
+  if (fields.includes("*")) return outFields;
+  for (const f of ["max_electric_power_station", ...CHARGE_POINT_FIELDS]) if (!fields.includes(f)) fields.push(f);
+  return fields.join(",");
+}
+
+/**
+ * Add `max_charge_point_kw` (maxChargePointKw) to every row that carries connector
+ * columns, and with `minKw` keep only the rows whose value reaches it (a row without a
+ * rating is dropped then).
+ */
+function withChargePointPower(features: Feature[], minKw: number | undefined): Feature[] {
+  return features.filter((f) => {
+    const a = f.attributes as Record<string, unknown>;
+    if (!hasChargePointFields(a)) return minKw === undefined;
+    const kw = maxChargePointKw(a);
+    a[MAX_CHARGE_POINT_KW_FIELD] = kw;
+    return minKw === undefined || (kw !== null && kw >= minKw);
+  });
+}
+
 /**
  * Smallest `--near` radius in km: 1 m. The radius goes to ArcGIS in whole metres,
  * so anything below half a metre would be sent as `distance=0` and match nothing.
@@ -175,7 +199,16 @@ function checkNumber(name: string, value: unknown, min: number, max: number): vo
 }
 
 /** The keys a `StationQuery` takes; any other key is refused (`checkKeys`). */
-export const STATION_QUERY_KEYS = ["where", "outFields", "limit", "offset", "orderBy", "near"] as const;
+export const STATION_QUERY_KEYS = ["where", "outFields", "limit", "offset", "orderBy", "near", "minChargePointKw"] as const;
+
+/** Largest `minChargePointKw` (the register's biggest station figure is below 2,000 kW). */
+export const MAX_CHARGE_POINT_KW = 10_000;
+
+/** Rows per request when `count()` pages through a `minChargePointKw` query (the server's page cap). */
+const POWER_COUNT_PAGE = 2000;
+
+/** Most pages `count()` reads for a `minChargePointKw` query (200,000 rows, more than the register holds). */
+const MAX_POWER_COUNT_PAGES = 100;
 
 /** The keys of `StationQuery.near`. */
 const NEAR_KEYS = ["lat", "lon", "radiusKm"] as const;
@@ -219,6 +252,12 @@ function checkQuery(q: StationQuery): void {
   checkText("orderBy", q.orderBy);
   checkInt("limit", q.limit, 1, MAX_LIMIT);
   checkInt("offset", q.offset, 0, Number.MAX_SAFE_INTEGER);
+  if (q.minChargePointKw !== undefined) {
+    const n = q.minChargePointKw;
+    if (typeof n !== "number" || !Number.isFinite(n) || n <= 0 || n > MAX_CHARGE_POINT_KW) {
+      throw invalid("minChargePointKw", `a number of kW above 0 and at most ${MAX_CHARGE_POINT_KW}`, n);
+    }
+  }
   if (q.near !== undefined) {
     if (q.near === null || typeof q.near !== "object") throw invalid("near", "{ lat, lon, radiusKm }", q.near);
     checkNumber("near.lat", q.near.lat, -90, 90);
@@ -270,7 +309,12 @@ export class LadesaeulenClient {
   private buildParams(q: StationQuery, extra: QueryParams): QueryParams {
     checkQuery(q);
     const p: QueryParams = { where: q.where ?? "1=1", ...extra };
-    if (q.outFields !== undefined) p.outFields = q.outFields;
+    if (q.minChargePointKw !== undefined) {
+      // Exact, not a guess: max_charge_point_kw is capped at the station figure, so a row
+      // that passes has a station figure of at least the minimum.
+      p.where = `(${q.where ?? "1=1"}) AND CAST(max_electric_power_station AS FLOAT) >= ${q.minChargePointKw}`;
+    }
+    if (q.outFields !== undefined) p.outFields = q.minChargePointKw === undefined ? q.outFields : withPowerFields(q.outFields);
     if (q.limit !== undefined) p.resultRecordCount = q.limit;
     if (q.offset !== undefined) p.resultOffset = q.offset;
     if (q.orderBy !== undefined) p.orderByFields = q.orderBy;
@@ -294,7 +338,7 @@ export class LadesaeulenClient {
     );
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
     return {
-      features: featureList(res.features, `${LAYER}/query`),
+      features: withChargePointPower(featureList(res.features, `${LAYER}/query`), q.minChargePointKw),
       exceededTransferLimit: res.exceededTransferLimit === true,
     };
   }
@@ -308,6 +352,7 @@ export class LadesaeulenClient {
   async count(q: StationQuery = {}): Promise<number> {
     q = queryArg(q);
     assertValid("count query", q, countQueryProblem);
+    if (q.minChargePointKw !== undefined) return this.countByChargePointPower(q, q.minChargePointKw);
     const params = this.buildParams(q, { f: "json", returnCountOnly: true });
     const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
     // 0 is a plausible real answer, so a reply without a usable count must not
@@ -317,6 +362,38 @@ export class LadesaeulenClient {
       throw shapeError(`${LAYER}/query`, "a non-negative integer count");
     }
     return count;
+  }
+
+  /**
+   * `count()` for a `minChargePointKw` query. The server cannot read the connector ratings,
+   * so the client reads the stations that pass the server-side part of the filter (the
+   * station figure), 2,000 per request in `OBJECTID` order, and counts those whose
+   * `max_charge_point_kw` reaches the minimum: one request per 2,000 such stations.
+   */
+  private async countByChargePointPower(q: StationQuery, minKw: number): Promise<number> {
+    const path = `${LAYER}/query`;
+    let offset = 0;
+    let total = 0;
+    for (let page = 0; page < MAX_POWER_COUNT_PAGES; page++) {
+      const params = this.buildParams(
+        {
+          ...q,
+          outFields: ["OBJECTID", "max_electric_power_station", ...CHARGE_POINT_FIELDS].join(","),
+          limit: POWER_COUNT_PAGE,
+          offset,
+          orderBy: "OBJECTID",
+        },
+        { f: "json", returnGeometry: false },
+      );
+      const res = await this.get<ArcGisQueryResponse>(path, params);
+      const features = featureList(res.features, path);
+      total += withChargePointPower(features, minKw).length;
+      if (res.exceededTransferLimit !== true || features.length === 0) return total;
+      offset += features.length;
+    }
+    throw new LadesaeulenValidationError(
+      `Invalid minChargePointKw query: more than ${MAX_POWER_COUNT_PAGES * POWER_COUNT_PAGE} stations to check; narrow the where filter.`,
+    );
   }
 
   /**
@@ -346,7 +423,16 @@ export class LadesaeulenClient {
     features.forEach((f: unknown, i) => {
       if (!isObject(f)) throw shapeError(path, `every feature to be a JSON object, feature ${i} is ${kindOf(f)}`);
     });
-    return res as unknown as GeoJsonFeatureCollection;
+    const collection = res as unknown as GeoJsonFeatureCollection;
+    // GeoJSON carries the columns in `properties`; derive and filter the same way.
+    const kept = collection.features.filter((f) => {
+      const props = isObject(f.properties) ? f.properties : undefined;
+      if (props === undefined || !hasChargePointFields(props)) return q.minChargePointKw === undefined;
+      const kw = maxChargePointKw(props);
+      props[MAX_CHARGE_POINT_KW_FIELD] = kw;
+      return q.minChargePointKw === undefined || (kw !== null && kw >= q.minChargePointKw);
+    });
+    return { ...collection, features: kept };
   }
 
   /**

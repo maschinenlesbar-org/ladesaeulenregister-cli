@@ -15,6 +15,7 @@ import {
   parseIntArg,
   parseLatLon,
   parseNonEmpty,
+  parsePointKw,
   parseRadiusKm,
   renderJson,
 } from "../shared.js";
@@ -32,7 +33,13 @@ function isOutsideGermany(lat: number, lon: number): boolean {
  * The stderr note for a truncated page. When the page is as long as `--limit`, the
  * user's own limit cut it; only a shorter page means the server's ~2000-row cap did.
  */
-function truncationNote(rows: number, limit: number): string {
+function truncationNote(rows: number, limit: number, filtered = false): string {
+  if (filtered) {
+    return (
+      `Note: more stations may match than the ${rows} returned: --min-point-kw checked one page of ` +
+      `candidates (--limit ${limit}, the server sends at most ~2000). Page with --offset, or raise --limit.`
+    );
+  }
   if (rows >= limit) {
     return `Note: more stations match than the ${rows} returned (--limit ${limit}). Page with --offset, or raise --limit.`;
   }
@@ -77,6 +84,7 @@ function buildStationQuery(opts: Record<string, unknown>): StationQuery {
   if (typeof opts["offset"] === "number") q.offset = opts["offset"];
   if (typeof opts["orderBy"] === "string") q.orderBy = opts["orderBy"];
   if (typeof opts["fields"] === "string") q.outFields = opts["fields"];
+  if (typeof opts["minPointKw"] === "number") q.minChargePointKw = opts["minPointKw"];
 
   const near = opts["near"] as { lat: number; lon: number } | undefined;
   const radius = opts["radius"] as number | undefined;
@@ -108,6 +116,12 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .option("--fields <list>", "comma-separated field list, or '*' for all (see `fields`)", parseNonEmpty)
     .option("--near <lat,lon>", "only stations near this WGS84 point (needs --radius)", parseLatLon)
     .option("--radius <km>", "search radius in km for --near (0.001..1000)", parseRadiusKm)
+    .option(
+      "--min-point-kw <kW>",
+      "only stations where one charge point can deliver at least this many kW (adds max_charge_point_kw, " +
+        "read from the connector columns; max_electric_power_station is often the sum of all points)",
+      parsePointKw,
+    )
     .option("--count", "print only the number of matching stations")
     .option("--geojson", "output a GeoJSON FeatureCollection instead of ArcGIS JSON")
     .action(
@@ -128,13 +142,13 @@ export function registerCommands(program: Command, deps: CliDeps): void {
           const collection = await client.geojson(q);
           // ArcGIS puts the flag on the FeatureCollection's `properties`.
           if (collection.properties?.exceededTransferLimit === true) {
-            deps.io.err(truncationNote(collection.features.length, q.limit ?? DEFAULT_LIMIT));
+            deps.io.err(truncationNote(collection.features.length, q.limit ?? DEFAULT_LIMIT, q.minChargePointKw !== undefined));
           }
           renderJson(deps, global, collection);
         } else {
           const page = await client.stations(q);
           if (page.exceededTransferLimit) {
-            deps.io.err(truncationNote(page.features.length, q.limit ?? DEFAULT_LIMIT));
+            deps.io.err(truncationNote(page.features.length, q.limit ?? DEFAULT_LIMIT, q.minChargePointKw !== undefined));
           }
           renderJson(deps, global, page);
         }

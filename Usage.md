@@ -31,6 +31,7 @@ ladesaeulen [global options] <command> [command options]
 | `--fields <list>` | comma-separated field list, or `'*'` for all |
 | `--near <lat,lon>` | only stations near this WGS84 point (needs `--radius`) |
 | `--radius <km>` | search radius in km for `--near`: a plain decimal from `0.001` (1 m) to `1000` |
+| `--min-point-kw <kW>` | only stations where **one charge point** can deliver at least this many kW (a plain decimal above 0, at most 10000). Read from the connector ratings in `Steckersystem_Ladepunkt1..10`, capped at the station figure; each row gets the derived `max_charge_point_kw`, and the connector columns are added to `--fields`. The server filters on the station figure and the CLI on the ratings, so a page can be shorter than `--limit`; with `--count` the CLI reads every candidate, one request per 2,000 |
 | `--count` | print only the number of matching stations (all of them: combine it with `--where` and `--near`/`--radius`; with `--limit`, `--offset`, `--order-by`, `--fields` or `--geojson` it is a usage error) |
 | `--geojson` | output a GeoJSON FeatureCollection instead of ArcGIS JSON |
 
@@ -64,6 +65,9 @@ Standard Esri SQL over the layer's columns:
 
 - strings are **case-sensitive and single-quoted**: `Ort='Berlin'`, `state='Bayern'`
 - partial match: `operator_companyName LIKE '%EnBW%'`
+- `max_electric_power_station` is the operator's figure for the **whole station**, often the
+  sum of its charge points (2 × 160 kW reads `320`), so it is not the power a car can get:
+  use `--min-point-kw` for that (above)
 - `max_electric_power_station` and `Anzahl_Ladepunkte` are **text** columns (`esriFieldTypeString`
   in `fields`); cast them to compare as numbers:
   `CAST(max_electric_power_station AS FLOAT) >= 150`, `CAST(Anzahl_Ladepunkte AS INTEGER) > 2`.

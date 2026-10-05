@@ -4,7 +4,7 @@
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import type { CliDeps } from "./io.js";
-import { MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "../client/client.js";
+import { MAX_CHARGE_POINT_KW, MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "../client/client.js";
 import { baseUrlProblem, headerValueProblem } from "../client/validate.js";
 
 /**
@@ -70,6 +70,21 @@ export function parseRadiusKm(value: string): number {
     throw new InvalidArgumentError(`Radius must be between ${MIN_RADIUS_KM} and ${MAX_RADIUS_KM} km.`);
   }
   return km;
+}
+
+/**
+ * commander value-parser for `--min-point-kw`: a plain decimal number of kW (`150`,
+ * `3.7`) above 0 and at most `MAX_CHARGE_POINT_KW`, the library's `minChargePointKw` range.
+ */
+export function parsePointKw(value: string): number {
+  if (!/^\d+(?:\.\d+)?$/.test(value)) {
+    throw new InvalidArgumentError("Expected a power in kW as a plain decimal number (e.g. 150).");
+  }
+  const n = Number(value);
+  if (n <= 0 || n > MAX_CHARGE_POINT_KW) {
+    throw new InvalidArgumentError(`Power must be above 0 and at most ${MAX_CHARGE_POINT_KW} kW.`);
+  }
+  return n;
 }
 
 /** commander value-parser for `--near`: a `lat,lon` pair in WGS84 degrees. */

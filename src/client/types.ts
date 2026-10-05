@@ -31,11 +31,23 @@ export interface ChargingStation {
   coordinates_latitude?: number;
   coordinates_longitude?: number;
   /**
-   * Max electric power of the station, in kW, as a decimal string (`"150"`,
-   * `"3.7"`): the column is `esriFieldTypeString`. Filter and sort it with
-   * `CAST(max_electric_power_station AS FLOAT)`.
+   * The operator's power figure for the whole station, in kW, as a decimal string
+   * (`"150"`, `"3.7"`): the column is `esriFieldTypeString`; filter and sort it with
+   * `CAST(max_electric_power_station AS FLOAT)`. **Not the power a car can get:** many
+   * operators enter the sum of the charge points (2 × 160 kW CCS → `"320"`, 2 × 22 kW
+   * AC → `"44"`), others the fastest point (4 × 22 kW → `"22"`), some a station limit
+   * below the connectors' rating. For "charge at N kW" use `max_charge_point_kw` and
+   * `StationQuery.minChargePointKw`.
    */
   max_electric_power_station?: string;
+  /**
+   * Derived by the client, not a register column: the most one charge point can deliver
+   * by the register's figures — the fastest connector rating in
+   * `Steckersystem_Ladepunkt1..10` ("… (160 kw)"), capped at `max_electric_power_station`
+   * when that is lower (`maxChargePointKw`). Added to every row that carries a
+   * connector column; `null` when no connector has a rating.
+   */
+  max_charge_point_kw?: number | null;
   /** Number of charge points, as a string (`"2"`; the column is `esriFieldTypeString`). */
   Anzahl_Ladepunkte?: string;
   go_live_date?: string;
@@ -142,4 +154,14 @@ export interface StationQuery {
   orderBy?: string;
   /** Spatial filter: only stations within `radiusKm` of this point. */
   near?: { lat: number; lon: number; radiusKm: number };
+  /**
+   * Only stations where one charge point can deliver at least this many kW
+   * (`max_charge_point_kw >= minChargePointKw`; above 0, at most `MAX_CHARGE_POINT_KW`).
+   * The server filters on the station figure (`CAST(max_electric_power_station AS FLOAT)
+   * >= n`, exact because `max_charge_point_kw` is capped at it), the client on the
+   * connector ratings, which the server cannot read. The connector columns are added to
+   * `outFields`. `limit`/`offset` page the server's rows, so a page can hold fewer rows
+   * than `limit`; `count()` reads every candidate, 2,000 per request.
+   */
+  minChargePointKw?: number;
 }

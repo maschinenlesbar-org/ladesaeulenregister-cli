@@ -8,7 +8,17 @@ export {
   MIN_RADIUS_KM,
   MAX_RADIUS_KM,
   STATION_QUERY_KEYS,
+  MAX_CHARGE_POINT_KW,
 } from "./client.js";
+export {
+  CHARGE_POINT_FIELDS,
+  MAX_CHARGE_POINT_KW_FIELD,
+  chargePointRatingsKw,
+  connectorRatingsKw,
+  hasChargePointFields,
+  maxChargePointKw,
+  stationPowerKw,
+} from "./power.js";
 export type { LadesaeulenClientOptions } from "./client.js";
 export {
   RequestEngine,

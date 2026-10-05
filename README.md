@@ -49,8 +49,13 @@ ladesaeulen fields                                             # the queryable c
 - **`count-by <field>`** aggregates (e.g. per `state`, `Typ`, `operator_companyName`).
 - **`fields`** lists the queryable columns (build `--where`/`--fields`/`count-by`).
 
-Filter values are **SQL, case-sensitive, single-quoted** (`Ort='Berlin'`). Power is a
-text column, so compare it with `CAST(max_electric_power_station AS FLOAT) >= 150`. Global
+Filter values are **SQL, case-sensitive, single-quoted** (`Ort='Berlin'`). `max_electric_power_station` is
+the operator's figure for the whole station — often the **sum** of its charge points (2 × 160 kW
+reads `320`) — and a text column (`CAST(max_electric_power_station AS FLOAT) >= 150`). For
+"where can a car charge at N kW", use `--min-point-kw N`: it reads each charge point's
+connector rating and adds `max_charge_point_kw` to every row
+(`ladesaeulen stations --where "Ort='München'" --min-point-kw 300` → 36 stations, where the
+station figure alone gives 49; 2026-10-06). Global
 flags: `--base-url`, `--timeout`, `--user-agent`, `--max-retries`,
 `--max-response-bytes`, `--compact`. See [Usage.md](Usage.md).
 
@@ -63,6 +68,8 @@ const c = new LadesaeulenClient();
 await c.count({ where: "Typ='Schnellladeeinrichtung'" });          // number
 await c.countBy("state");                                          // per Bundesland
 const near = await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
+// stations with a charge point of at least 300 kW; each row gets max_charge_point_kw
+const fast = await c.stations({ where: "Ort='München'", minChargePointKw: 300, limit: 200 });
 ```
 
 ## Documentation
