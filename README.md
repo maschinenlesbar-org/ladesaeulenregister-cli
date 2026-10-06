@@ -65,7 +65,7 @@ flags: `--base-url`, `--timeout`, `--user-agent`, `--max-retries`,
 loopback (`localhost`, `127.0.0.0/8`, `::1`) prints one
 `warning: requests to <host> are sent unencrypted (http:, not https:)` line on stderr
 before the first request (naming the URL's credentials instead when it carries any,
-never printing them); stdout and the exit code are unchanged. See [Usage.md](Usage.md).
+never printing them); stdout and the exit code are unchanged. See [Usage.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/Usage.md).
 
 ## Library
 
@@ -82,11 +82,11 @@ const fast = await c.stations({ where: "Ort='München'", minChargePointKw: 300, 
 
 ## Documentation
 
-- [Usage.md](Usage.md) — commands, the `--where`/spatial options, exit codes
-- [DEVELOPING.md](DEVELOPING.md) — architecture, testing, the ArcGIS specifics
-- [GLOSSARY.md](GLOSSARY.md) — the register's fields and terms
+- [Usage.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/Usage.md) — commands, the `--where`/spatial options, exit codes
+- [DEVELOPING.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/DEVELOPING.md) — architecture, testing, the ArcGIS specifics
+- [GLOSSARY.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/GLOSSARY.md) — the register's fields and terms
 - [DATA_LICENSE.md](DATA_LICENSE.md) — the CC BY 4.0 data terms
-- [SKILLS.md](SKILLS.md) — the Claude Code skills this repo ships
+- [SKILLS.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/SKILLS.md) — the Claude Code skills this repo ships
 
 ## Licence
 
