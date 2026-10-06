@@ -18,12 +18,12 @@ const call = (client: Client): Promise<unknown> => client.count();
 /** A 2xx body the call accepts. */
 const okBody = { count: 5 };
 /**
- * Whether a reset connection is retried. ladesaeulen retries only 429/503 (Usage.md,
- * `--max-retries`), never a network error: a reset, a timeout or a refused connection
- * surfaces at once as a LadesaeulenNetworkError (exit 6). The case then checks that each
- * reset shape is one attempt and a NetworkError.
+ * Whether a reset connection is retried. ladesaeulen retries a GET whose connection was
+ * reset like a 503 (Usage.md, `--max-retries`), whichever shape the transport reports it
+ * in; a timeout or a refused connection still surfaces at once as a
+ * LadesaeulenNetworkError (exit 6).
  */
-const RESETS_RETRIED = false;
+const RESETS_RETRIED = true;
 // --------------------------------------------------------------------------------------
 
 const okJson = (): HttpResponse => ({

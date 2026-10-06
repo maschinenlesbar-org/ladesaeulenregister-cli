@@ -23,6 +23,7 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 | **`exceededTransferLimit`** | Ausgabefeld | `true` ⇒ es passten mehr Features, als zurückgegeben wurden; blättern Sie mit `--limit`/`--offset`. |
 | **`count-by`** | Befehl | Serverseitig gruppierte Zählungen (`outStatistics`), z. B. Ladeeinrichtungen je `state`. |
 | **`info`** | Befehl | Wie aktuell das Register ist: Name des Layers und seine letzten Bearbeitungsdaten (`dataLastEditDate`, ISO 8601). |
+| **`--max-retries`** | Option | Wie oft ein vorübergehender Fehler wiederholt wird (Standard `2`): eine `429`/`503`-Antwort und ein GET, dessen Verbindung mitten in der Anfrage zurückgesetzt wurde (`socket hang up`, `ECONNRESET`), jeweils nach einem linearen Backoff ab 200 ms oder dem längeren `Retry-After` des Servers. Bleibt der Fehler bestehen, endet die Meldung mit `(after 2 retries)`; eine abgelehnte Verbindung, ein DNS-Fehler oder eine Zeitüberschreitung wird nicht wiederholt. |
 
 ## Die Daten lesen
 

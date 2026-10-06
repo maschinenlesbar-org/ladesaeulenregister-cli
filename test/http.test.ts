@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { nodeHttpTransport } from "../src/client/http.js";
+import { LadesaeulenClient } from "../src/client/client.js";
 import { LadesaeulenNetworkError } from "../src/client/errors.js";
 
 /** Start a throwaway loopback server for one test and return its base URL. */
@@ -92,6 +93,47 @@ test("enforces maxResponseBytes", async () => {
         () => nodeHttpTransport({ method: "GET", url: baseUrl, maxResponseBytes: 10 }),
         LadesaeulenNetworkError,
       );
+    },
+  );
+});
+
+test("the client retries a GET whose connection the server reset before answering", async () => {
+  let requests = 0;
+  await withServer(
+    (_req, res) => {
+      requests += 1;
+      if (requests === 1) {
+        res.socket?.destroy();
+        return;
+      }
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ count: 3 }));
+    },
+    async (baseUrl) => {
+      const client = new LadesaeulenClient({ baseUrl, maxRetries: 2, sleep: async () => {} });
+      assert.equal(await client.count(), 3);
+      assert.equal(requests, 2);
+    },
+  );
+});
+
+test("the client retries a GET whose response body was cut off mid-way", async () => {
+  let requests = 0;
+  await withServer(
+    (_req, res) => {
+      requests += 1;
+      const body = JSON.stringify({ count: 4 });
+      res.writeHead(200, { "content-type": "application/json", "content-length": String(body.length + 100) });
+      if (requests === 1) {
+        res.write(body.slice(0, 3), () => res.socket?.destroy());
+        return;
+      }
+      res.end(body + " ".repeat(100));
+    },
+    async (baseUrl) => {
+      const client = new LadesaeulenClient({ baseUrl, maxRetries: 2, sleep: async () => {} });
+      assert.equal(await client.count(), 4);
+      assert.equal(requests, 2);
     },
   );
 });

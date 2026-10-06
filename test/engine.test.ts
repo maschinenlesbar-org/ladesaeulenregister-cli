@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { RequestEngine, MAX_GET_URL_LENGTH, cleartextProblem, parseRetryAfter } from "../src/client/engine.js";
 import {
   LadesaeulenApiError,
+  LadesaeulenNetworkError,
   LadesaeulenParseError,
   LadesaeulenValidationError,
 } from "../src/client/errors.js";
@@ -116,6 +117,81 @@ test("a 503 is retried up to maxRetries then surfaces as a LadesaeulenApiError",
   const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
   await assert.rejects(() => e.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 503);
   assert.equal(calls, 3);
+});
+
+const resetError = (): Error => Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+
+test("a GET whose connection was reset is retried like a 503, with the linear backoff", async () => {
+  let calls = 0;
+  const sleeps: number[] = [];
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    if (calls < 3) throw resetError();
+    return jsonResponse({ count: 7 });
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async (ms) => void sleeps.push(ms) });
+  assert.deepEqual(await e.getJson("/0/query", { f: "json" }), { count: 7 });
+  assert.equal(calls, 3);
+  assert.deepEqual(sleeps, [200, 400]);
+});
+
+test("a reset that persists surfaces as a LadesaeulenNetworkError that names the retries", async () => {
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    throw resetError();
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+  await assert.rejects(
+    () => e.getJson("/x"),
+    (err: unknown) =>
+      err instanceof LadesaeulenNetworkError &&
+      /^GET .* failed: socket hang up \(after 2 retries\)$/.test(err.message) &&
+      (err.cause as { code?: string } | undefined)?.code === "ECONNRESET",
+  );
+  assert.equal(calls, 3);
+});
+
+test("maxRetries 0 turns the reset retries off", async () => {
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    throw resetError();
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 0, sleep: async () => {} });
+  await assert.rejects(() => e.getJson("/x"), (err: unknown) => err instanceof LadesaeulenNetworkError && !/after/.test(err.message));
+  assert.equal(calls, 1);
+});
+
+test("a refused connection, a DNS failure and a timeout are not retried", async () => {
+  const failures: Array<() => unknown> = [
+    () => Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:1"), { code: "ECONNREFUSED" }),
+    () => Object.assign(new Error("getaddrinfo ENOTFOUND example.invalid"), { code: "ENOTFOUND" }),
+    () => new LadesaeulenNetworkError("Request timed out after 30000ms"),
+  ];
+  for (const failure of failures) {
+    let calls = 0;
+    const mt = makeMockTransport(() => {
+      calls += 1;
+      throw failure();
+    });
+    const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+    await assert.rejects(() => e.getJson("/x"), LadesaeulenNetworkError);
+    assert.equal(calls, 1, String(failure()));
+  }
+});
+
+test("a long-query form POST is not re-sent after a reset (a 503 still is)", async () => {
+  const where = `Ort IN ('Berlin'${Array.from({ length: 200 }, (_, i) => `,'X${String(i).padStart(4, "0")}'`).join("")})`;
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    throw resetError();
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+  await assert.rejects(() => e.getJson("/0/query", { where, f: "json" }), LadesaeulenNetworkError);
+  assert.equal(mt.last().method, "POST");
+  assert.equal(calls, 1);
 });
 
 test("the engine rejects a non-http(s) base URL before any request, even with a custom transport", () => {

@@ -77,9 +77,16 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `LadesaeulenApiError` surfaces at once, with `retryAfterMs` set and a message that
   names the wait (`…; the server asked to retry after 3600 s, longer than the 30 s the
   client waits; not retried — try again after that`). After spent retries the message
-  ends `(after N retries)` and `retries` holds the count. Network errors
-  (a reset or refused connection, DNS, a timeout) are not retried; they surface at once
-  as `LadesaeulenNetworkError` (exit 6).
+  ends `(after N retries)` and `retries` holds the count. A **reset connection** is
+  retried like a 503, with the linear backoff and the same `maxRetries`: the engine
+  retries when the transport's error, or one in its `cause` chain, has the code
+  `ECONNRESET` (Node's `socket hang up`, a response cut off mid-body), `EPIPE`,
+  `ECONNABORTED` or `UND_ERR_SOCKET` (fetch's `other side closed`) — `hasTransientCode`
+  in `engine.ts`. Only a GET or HEAD is sent again: the long-query form POST is not
+  re-sent after a reset (a 503 to it still is). A reset that persists surfaces as a
+  `LadesaeulenNetworkError` ending `(after N retries)`. Other network errors (a refused
+  connection, DNS, a timeout) are not retried; they surface at once as
+  `LadesaeulenNetworkError` (exit 6).
 - **Every transport is held to the same contract** (`engine.ts`), so a custom one (a
   `fetch` adapter, a test double) needs none of it itself: each call runs under the
   overall `timeoutMs` deadline (the request carries an `AbortSignal`,
@@ -221,7 +228,7 @@ The conformance tests of the 2026-10-05 review's fix patterns are shared across 
 `*-cli` repos; only their adapter block at the top is this repo's:
 `conformance-p1-cli-redaction`, `-p2-library-redaction`, `-p4-p19-config-validation`
 (P19 skipped: no environment variable), `-p5-transport-contract` (`RESETS_RETRIED =
-false`), `-p6-retry-policy` (`ABOVE_CAP = "fail"`), `-p7-pipes-exit-codes` (runs the
+true`), `-p6-retry-policy` (`ABOVE_CAP = "fail"`), `-p7-pipes-exit-codes` (runs the
 built bin), `-p8-p9-p13-responses-and-errors` and `-p10-strict-filters` (the filter-name
 cases empty: ArcGIS rejects an unknown column itself). The follow-up round of 2026-10-06
 added P20 (`conformance-p20-cleartext-warning`: a remote plain `http:` base URL gets one

@@ -60,8 +60,8 @@ reads `320`) — and a text column (`CAST(max_electric_power_station AS FLOAT) >
 connector rating and adds `max_charge_point_kw` to every row
 (`ladesaeulen stations --where "Ort='München'" --min-point-kw 300` → 36 stations, where the
 station figure alone gives 49; 2026-10-06). Global
-flags: `--base-url`, `--timeout`, `--user-agent`, `--max-retries`,
-`--max-response-bytes`, `--compact`. A `--base-url` on plain `http:` to a host other than
+flags: `--base-url`, `--timeout`, `--user-agent`, `--max-retries` (429/503 responses and
+reset connections), `--max-response-bytes`, `--compact`. A `--base-url` on plain `http:` to a host other than
 loopback (`localhost`, `127.0.0.0/8`, `::1`) prints one
 `warning: requests to <host> are sent unencrypted (http:, not https:)` line on stderr
 before the first request (naming the URL's credentials instead when it carries any,

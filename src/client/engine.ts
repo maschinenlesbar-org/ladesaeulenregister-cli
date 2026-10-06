@@ -1,8 +1,9 @@
 // The request engine: turns logical (path, query) calls into HTTP requests via a
-// Transport, applies retry/backoff for transient statuses (429, 503), and decodes
-// JSON responses. The Ladesäulenregister is a public ArcGIS FeatureServer — an
-// unauthenticated API whose parameters travel in the query string, or, for a query
-// too long for a URL, in a form-encoded POST body (ArcGIS `/query` accepts both).
+// Transport, applies retry/backoff for transient statuses (429, 503) and reset
+// connections, and decodes JSON responses. The Ladesäulenregister is a public ArcGIS
+// FeatureServer — an unauthenticated API whose parameters travel in the query string,
+// or, for a query too long for a URL, in a form-encoded POST body (ArcGIS `/query`
+// accepts both).
 
 import {
   MAX_TIMEOUT_MS,
@@ -63,8 +64,10 @@ export interface EngineOptions {
    * Number of automatic retries for transient (429/503) responses, an integer
    * 0..`MAX_RETRIES` (10); defaults to 2. Each waits `retryDelayMs * attempt`, or the
    * response's `Retry-After` when that is longer (up to `MAX_RETRY_AFTER_MS`; a longer
-   * one is not retried, and the LadesaeulenApiError says so). Network errors are not
-   * retried.
+   * one is not retried, and the LadesaeulenApiError says so). A GET whose connection
+   * was reset (ECONNRESET, `socket hang up`, undici's UND_ERR_SOCKET, a body cut off
+   * mid-way) is retried the same way, with the linear backoff; a refused connection, a
+   * DNS failure or a timeout is not.
    */
   maxRetries?: number;
   /**
@@ -103,6 +106,26 @@ function intOption(name: string, value: number | undefined, max: number, fallbac
  * out, and a hostile value must not stall the CLI.
  */
 export const MAX_RETRY_AFTER_MS = 30_000;
+
+/**
+ * Error codes of a connection that broke off mid-request: Node's (`socket hang up` and a
+ * response cut off mid-body are ECONNRESET) and undici's (`fetch failed` with cause
+ * UND_ERR_SOCKET, "other side closed").
+ */
+const TRANSIENT_NETWORK_CODES = new Set(["ECONNRESET", "EPIPE", "ECONNABORTED", "UND_ERR_SOCKET"]);
+
+/**
+ * True when `err` or an error in its `cause` chain has a transient connection code —
+ * whichever transport raised it (the default one wraps Node's error as `cause`, fetch's
+ * TypeError carries undici's). A refused connection (ECONNREFUSED), a DNS failure or a
+ * timeout has none of these codes and is not retried.
+ */
+function hasTransientCode(err: unknown, depth = 0): boolean {
+  if (typeof err !== "object" || err === null || depth > 4) return false;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string" && TRANSIENT_NETWORK_CODES.has(code)) return true;
+  return hasTransientCode((err as { cause?: unknown }).cause, depth + 1);
+}
 
 /** An IMF-fixdate (RFC 9110 §5.6.7), the one HTTP-date form senders must generate. */
 const IMF_FIXDATE =
@@ -505,8 +528,9 @@ export class RequestEngine {
    * Every transport is held to the same contract: the `timeoutMs` deadline and the
    * `maxResponseBytes` cap apply whatever it does, headers may be a record in any
    * case, a `Headers` object or a `Map`, the body any ArrayBuffer view, and anything
-   * else it throws or returns is a LadesaeulenNetworkError. Only 429/503 statuses are
-   * retried, not network errors (a reset connection included).
+   * else it throws or returns is a LadesaeulenNetworkError. 429/503 statuses are
+   * retried, and so is a GET whose connection was reset (see `hasTransientCode`); a
+   * form POST is not re-sent after a reset, and no other network error is retried.
    */
   async request(path: string, query?: QueryParams, accept = "application/json"): Promise<RawResponse> {
     const { method, url, body } = this.requestTarget(path, query);
@@ -520,6 +544,10 @@ export class RequestEngine {
       headers["Content-Length"] = String(Buffer.byteLength(body));
     }
 
+    // Only an idempotent request is sent again after a reset: request() is public, and a
+    // POST re-sent after a reset may be applied twice. (The long-query form POST is a read,
+    // but keep the rule simple: GET and HEAD only.)
+    const idempotent = /^(GET|HEAD)$/i.test(method);
     let attempt = 0;
     for (;;) {
       let response: HttpResponse;
@@ -533,7 +561,23 @@ export class RequestEngine {
           ...(this.maxResponseBytes > 0 ? { maxResponseBytes: this.maxResponseBytes } : {}),
         });
       } catch (cause) {
-        throw this.toNetworkError(method, url, cause);
+        // A connection the server (or a gateway) reset is the network-level twin of a 503:
+        // retry the GET with the same linear backoff, whichever transport reported it.
+        // Timeouts are not retried — a slow upstream should not be asked again at once,
+        // and timeoutMs bounds each attempt.
+        if (idempotent && hasTransientCode(cause) && attempt < this.maxRetries) {
+          attempt += 1;
+          await this.sleep(this.retryDelayMs * attempt);
+          continue;
+        }
+        const err = this.toNetworkError(method, url, cause);
+        // Say that the reset persisted through the retries, as an API error does.
+        if (attempt > 0 && err instanceof LadesaeulenNetworkError) {
+          throw new LadesaeulenNetworkError(`${err.message} (after ${attempt} ${attempt === 1 ? "retry" : "retries"})`, {
+            cause: err.cause,
+          });
+        }
+        throw err;
       }
 
       // An injected transport may resolve with anything; a malformed HttpResponse would

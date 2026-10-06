@@ -23,6 +23,7 @@ data are German (with umlauts); keep them verbatim in `--where`.
 | **`exceededTransferLimit`** | output field | `true` ⇒ more features matched than were returned; page with `--limit`/`--offset`. |
 | **`count-by`** | command | Server-side grouped counts (`outStatistics`), e.g. stations per `state`. |
 | **`info`** | command | How current the register is: the layer's name and its last edit dates (`dataLastEditDate`, ISO 8601). |
+| **`--max-retries`** | option | How often a transient failure is retried (default `2`): a `429`/`503` response, and a GET whose connection was reset mid-request (`socket hang up`, `ECONNRESET`), each after a linear backoff from 200 ms or the server's longer `Retry-After`. A failure that persists ends its message with `(after 2 retries)`; a refused connection, a DNS failure or a timeout is not retried. |
 
 ## Reading the data
 

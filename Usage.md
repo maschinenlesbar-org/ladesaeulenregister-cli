@@ -15,7 +15,7 @@ ladesaeulen [global options] <command> [command options]
 | `--base-url <url>` | API base URL (the ArcGIS FeatureServer); `http:`/`https:` only, no query (`?`), fragment (`#`) or surrounding whitespace, and a `%` in a user name or password must be an escape (write a literal `%` as `%25`); anything else is a usage error (exit 2) before any request. A plain `http:` URL to a non-loopback host (not `localhost`, `127.0.0.0/8`, `::1`) gets one `warning: … sent unencrypted (http:, not https:)` line on stderr naming the host (and the URL's credentials, never printed); stdout and the exit code are unchanged |
 | `--timeout <ms>` | time limit per request in ms, whole response included (default 30000 = 30 s; 0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value (not blank; Latin-1 text without control characters) |
-| `--max-retries <n>` | retries for transient 429/503 responses (0..10, default 2). Each retry backs off 200 ms, 400 ms, …, or waits the server's `Retry-After` (seconds or an HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried — the error is reported at once and names the wait the server asked for. A status that persists ends the message with `(after N retries)`. Network errors (a reset or refused connection, a timeout) are not retried |
+| `--max-retries <n>` | retries for transient 429/503 responses and reset connections (0..10, default 2). Each retry backs off 200 ms, 400 ms, …, or waits the server's `Retry-After` (seconds or an HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried — the error is reported at once and names the wait the server asked for. A connection reset mid-request (`socket hang up`, `ECONNRESET`, a body cut off mid-way) is retried the same way, with the linear backoff, for a GET (a long `--where` sent as a form POST is not re-sent); a run that recovers exits 0. A status or reset that persists ends the message with `(after N retries)`. Other network errors (a refused connection, DNS, a timeout) are not retried |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
 | `-V, --version` / `-h, --help` | version / help |
@@ -120,7 +120,7 @@ ladesaeulen fields --compact | jq '.[].name'
 | `1` | API/logical error (the ArcGIS `error` envelope), or a catch-all |
 | `2` | usage error (bad flags, unknown command, `--near` without `--radius`, `--count` with a paging/field option, a non-`http(s)` or malformed `--base-url`, redirecting base URL) |
 | `4` | HTTP 404 |
-| `6` | network / transport failure (DNS, connection, timeout, response size-cap) |
+| `6` | network / transport failure (DNS, connection, timeout, response size-cap; a reset connection once the retries are spent) |
 
 A reader that stops early (`ladesaeulen count-by Ort | head -n 3`) ends the run quietly
 with `0`. When stderr's reader is gone (`2>&1 | true`), a failed run still exits with its
