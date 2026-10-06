@@ -223,7 +223,11 @@ The conformance tests of the 2026-10-05 review's fix patterns are shared across 
 (P19 skipped: no environment variable), `-p5-transport-contract` (`RESETS_RETRIED =
 false`), `-p6-retry-policy` (`ABOVE_CAP = "fail"`), `-p7-pipes-exit-codes` (runs the
 built bin), `-p8-p9-p13-responses-and-errors` and `-p10-strict-filters` (the filter-name
-cases empty: ArcGIS rejects an unknown column itself).
+cases empty: ArcGIS rejects an unknown column itself). The follow-up round of 2026-10-06
+added P20 (`conformance-p20-cleartext-warning`: a remote plain `http:` base URL gets one
+`warning:` line on stderr from the library's `cleartextProblem`, printed by `action()` in
+`shared.ts` before the client is built; no base-URL variable and no secret here, so those
+two cases are skipped).
 
 ## Conventions to keep
 

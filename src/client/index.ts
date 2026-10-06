@@ -24,6 +24,7 @@ export type { LadesaeulenClientOptions } from "./client.js";
 export {
   RequestEngine,
   assertHeaderValue,
+  cleartextProblem,
   DEFAULT_BASE_URL,
   MAX_GET_URL_LENGTH,
   MAX_RETRIES,

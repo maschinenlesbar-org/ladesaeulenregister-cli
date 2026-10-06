@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RequestEngine, MAX_GET_URL_LENGTH, parseRetryAfter } from "../src/client/engine.js";
+import { RequestEngine, MAX_GET_URL_LENGTH, cleartextProblem, parseRetryAfter } from "../src/client/engine.js";
 import {
   LadesaeulenApiError,
   LadesaeulenParseError,
@@ -299,4 +299,21 @@ test("server text and long URLs are cut at 500 characters in messages, kept whol
   assert.ok(err.message.length < 1200, String(err.message.length));
   assert.ok(err.body.includes(long));
   assert.ok(err.url.length > 1500);
+});
+
+test("cleartextProblem: exact wording, host with port, loopback range, never the secret", () => {
+  assert.equal(cleartextProblem("http://mirror.example:8080/api"), "requests to mirror.example:8080 are sent unencrypted (http:, not https:)");
+  assert.equal(
+    cleartextProblem("http://alice:pw@mirror.example"),
+    "the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)",
+  );
+  assert.equal(
+    cleartextProblem("http://alice:pw@mirror.example", ["the API key"]),
+    "the API key and the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)",
+  );
+  assert.equal(cleartextProblem("http://mirror.example", ["the login"]), "the login is sent unencrypted to mirror.example (http:, not https:)");
+  for (const url of ["https://alice:pw@mirror.example", "http://127.8.9.10", "http://localhost:1", "http://[::1]/", "not a url"]) {
+    assert.equal(cleartextProblem(url), undefined, url);
+  }
+  assert.notEqual(cleartextProblem("http://128.0.0.1"), undefined);
 });

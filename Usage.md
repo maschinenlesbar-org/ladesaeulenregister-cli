@@ -12,7 +12,7 @@ ladesaeulen [global options] <command> [command options]
 
 | Option | Description |
 |---|---|
-| `--base-url <url>` | API base URL (the ArcGIS FeatureServer); `http:`/`https:` only, no query (`?`), fragment (`#`) or surrounding whitespace, and a `%` in a user name or password must be an escape (write a literal `%` as `%25`); anything else is a usage error (exit 2) before any request |
+| `--base-url <url>` | API base URL (the ArcGIS FeatureServer); `http:`/`https:` only, no query (`?`), fragment (`#`) or surrounding whitespace, and a `%` in a user name or password must be an escape (write a literal `%` as `%25`); anything else is a usage error (exit 2) before any request. A plain `http:` URL to a non-loopback host (not `localhost`, `127.0.0.0/8`, `::1`) gets one `warning: … sent unencrypted (http:, not https:)` line on stderr naming the host (and the URL's credentials, never printed); stdout and the exit code are unchanged |
 | `--timeout <ms>` | time limit per request in ms, whole response included (default 30000 = 30 s; 0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value (not blank; Latin-1 text without control characters) |
 | `--max-retries <n>` | retries for transient 429/503 responses (0..10, default 2). Each retry backs off 200 ms, 400 ms, …, or waits the server's `Retry-After` (seconds or an HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried — the error is reported at once and names the wait the server asked for. A status that persists ends the message with `(after N retries)`. Network errors (a reset or refused connection, a timeout) are not retried |
