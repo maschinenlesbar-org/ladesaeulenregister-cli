@@ -132,7 +132,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
   transport's per-hop scheme check and real transport failures.
   **The CLI redacts credentials on output:** `run.ts` (`redactionFor`, `withRedactedOutput`) takes the
-  exact userinfo of every argument (`credentialsIn`, exported) and replaces it with
+  exact userinfo of every URL argument (`credentialsIn`, exported; only a value that
+  starts with a scheme counts, since a bare `a:b@c` is a search text or a User-Agent as
+  often as a credential, except as the `--base-url` value, which is read as if it had
+  one) and replaces it with
   `***` in everything it prints — commander's usage errors, which echo rejected values
   (`argument '<url>' is invalid`, `unknown command '<url>'`, `too many arguments … got
   1: <url>`), the help that follows them, and API errors — so a password with spaces,
@@ -145,7 +148,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   occur in the data. `redactUrl` falls back to
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
   `test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
-  nine argv positions.
+  nine argv positions (the schemeless shape as the `--base-url` value only).
   **The library keeps them out too:** the engine holds the base URL in a real `#private`
   field (so `console.log(client)`, `util.inspect` and `JSON.stringify` never show it),
   every error names the request URL through `redactUrl` (`LadesaeulenApiError.url` and

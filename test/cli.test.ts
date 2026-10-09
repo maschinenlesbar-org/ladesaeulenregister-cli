@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { run } from "../src/cli/run.js";
 import { LadesaeulenClient } from "../src/client/client.js";
+import { credentialsIn } from "../src/client/errors.js";
 import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
 import { makeMockTransport, jsonResponse, queryOf, untimed } from "./helpers.js";
@@ -412,4 +413,16 @@ test("fields notes the columns that are empty on every row", async () => {
   );
   assert.equal(await run(["fields"], cli.deps), 0);
   assert.equal(untimed(cli.err.join("\n")), "INFO  [ladesaeulen.api] 1 of these columns are empty on every row of the register (checked 2026-10-06): json_type.");
+});
+
+test("an a:b@c argument (a User-Agent, a rejected value) is neither a credential in the log nor rewritten in the JSON on stdout (L14)", async () => {
+  const body = { features: [{ attributes: { Ort: "run:2026-10-09@x", count: 3 } }] };
+  const cli = makeCli(() => jsonResponse(body));
+  assert.equal(await run(["--user-agent", "run:2026-10-09@x", "count-by", "Ort"], cli.deps), 0);
+  assert.match(cli.out.join("\n"), /"value": "run:2026-10-09@x"/);
+  const typed = makeCli(() => jsonResponse(body));
+  assert.equal(await run(["--timeout", "run:2026-10-09@x", "count-by", "Ort"], typed.deps), 2);
+  assert.match(typed.err.join("\n"), /run:2026-10-09@x/);
+  assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
+  assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
 });
