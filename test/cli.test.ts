@@ -437,3 +437,21 @@ test("a run with options but no command logs an ERROR \"missing command\", then 
   assert.ok(records.some((record) => /\] Usage: ladesaeulen /.test(record)), records.join("\n"));
   assert.deepEqual(cli.out, []);
 });
+
+test("a parse error is logged in the format commander would have parsed (L6)", async () => {
+  const isJsonl = (line: string): boolean => line.startsWith("{");
+  const cases: [string[], boolean][] = [
+    // forbidRepeatedOptions keeps the first --log-format and rejects the second.
+    [["--log-format", "jsonl", "--log-format", "text", "stations"], true],
+    [["--log-format", "text", "--log-format", "jsonl", "stations"], false],
+    // --log-format is --user-agent's value; "jsonl" is then an unknown command.
+    [["--user-agent", "--log-format", "jsonl", "stations"], false],
+    // commander takes the program's --log-format out first; --where is left without its value.
+    [["stations", "--where", "--log-format", "jsonl"], true],
+  ];
+  for (const [argv, jsonl] of cases) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(argv, cli.deps), 2, argv.join(" "));
+    assert.ok(cli.err.length > 0 && cli.err.every((line) => isJsonl(line) === jsonl), `${argv.join(" ")}:\n${cli.err.join("\n")}`);
+  }
+});

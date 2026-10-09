@@ -304,7 +304,11 @@ and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cu
 code point and ends in `… (N more characters)`. The library's error messages keep a server's line
 breaks (`sanitizeServerText` strips only the other controls, and the ArcGIS `error`
 envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
-with `io.err` directly. `run()` builds the logger from argv before commander parses it,
+with `io.err` directly. `run()` builds the logger from argv before commander parses it
+(`logFormatFromArgv`, used only for the records of a parse error: it takes the first
+`--log-format`, the one `forbidRepeatedOptions` keeps, and skips the value of the
+program's own value options, as commander does; a `preAction` hook then sets the format
+commander parsed, so `--user-agent --log-format=jsonl` logs text),
 so commander's own usage errors are records too: its `error: …` an ERROR of `cli` (a
 `(Did you mean …?)` line joined to it), the help it shows after one an INFO record per
 line, and a run with options but no command an ERROR "missing command:
