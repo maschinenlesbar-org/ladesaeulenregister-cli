@@ -61,11 +61,26 @@ connector rating and adds `max_charge_point_kw` to every row
 (`ladesaeulen stations --where "Ort='München'" --min-point-kw 300` → 36 stations, where the
 station figure alone gives 49; 2026-10-06). Global
 flags: `--base-url`, `--timeout`, `--user-agent`, `--max-retries` (429/503 responses and
-reset connections), `--max-response-bytes`, `--compact`. A `--base-url` on plain `http:` to a host other than
-loopback (`localhost`, `127.0.0.0/8`, `::1`) prints one
-`warning: requests to <host> are sent unencrypted (http:, not https:)` line on stderr
+reset connections), `--max-response-bytes`, `--compact`, `--log-format`. A `--base-url` on plain `http:` to a host other than
+loopback (`localhost`, `127.0.0.0/8`, `::1`) logs one `WARN` record,
+`requests to <host> are sent unencrypted (http:, not https:)`, on stderr
 before the first request (naming the URL's credentials instead when it carries any,
 never printing them); stdout and the exit code are unchanged. See [Usage.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/Usage.md).
+
+stdout carries the JSON only. Each line on stderr is a **log record**: a timestamp (UTC), a
+level (`ERROR`, `WARN`, `INFO`) and a topic, the program and the area it comes from
+(`ladesaeulen.cli` for usage errors, `ladesaeulen.api` for the API's answers and the notes on
+them, `ladesaeulen.http` for the connection). By default it is written log4j style;
+`--log-format jsonl` writes one JSON object per line instead:
+
+```text
+2026-10-09T14:03:12.481Z WARN  [ladesaeulen.http] requests to mirror.test are sent unencrypted (http:, not https:)
+2026-10-09T14:03:12.902Z INFO  [ladesaeulen.api] more stations match than the 50 returned (--limit 50). Page with --offset, or raise --limit.
+```
+
+```bash
+ladesaeulen --log-format jsonl stations --where "Ort='Berlin'" 2>log.jsonl   # {"ts":"…","level":"INFO","topic":"ladesaeulen.api","msg":"more stations match …"}
+```
 
 ## Library
 

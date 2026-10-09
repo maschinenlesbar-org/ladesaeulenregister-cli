@@ -6,7 +6,7 @@ import * as lib from "../src/index.js";
 import { run } from "../src/cli/run.js";
 import { LadesaeulenClient } from "../src/client/client.js";
 import type { CliDeps } from "../src/cli/io.js";
-import { jsonResponse, makeMockTransport, parity, requestShapes } from "./helpers.js";
+import { jsonResponse, makeMockTransport, parity, requestShapes, untimed } from "./helpers.js";
 
 const notFoo: Problem<string> = (v) => (v === "foo" ? "Must not be foo." : undefined);
 
@@ -39,7 +39,7 @@ function cliWith(createClient: CliDeps["createClient"]) {
   return { deps, out, err };
 }
 
-test("run() maps a LadesaeulenValidationError from an action to the usage exit code 2 with 'Error: <message>'", async () => {
+test("run() maps a LadesaeulenValidationError from an action to the usage exit code 2 and an ERROR record", async () => {
   const mt = makeMockTransport(() => jsonResponse({}));
   const cli = cliWith((opts) => {
     const client = new LadesaeulenClient({ ...opts, transport: mt.transport });
@@ -51,7 +51,7 @@ test("run() maps a LadesaeulenValidationError from an action to the usage exit c
   const code = await run(["fields"], cli.deps);
   assert.equal(code, 2);
   assert.deepEqual(cli.out, []);
-  assert.equal(cli.err.join("\n"), "Error: Invalid thing: Must not be foo.");
+  assert.equal(untimed(cli.err.join("\n")), "ERROR [ladesaeulen.cli] Invalid thing: Must not be foo.");
   assert.equal(mt.calls.length, 0);
 });
 
@@ -60,7 +60,7 @@ test("run() maps a LadesaeulenValidationError thrown while building the client t
     throw new LadesaeulenValidationError("Invalid timeoutMs: Must be >= 0.");
   });
   assert.equal(await run(["fields"], cli.deps), 2);
-  assert.equal(cli.err.join("\n"), "Error: Invalid timeoutMs: Must be >= 0.");
+  assert.equal(untimed(cli.err.join("\n")), "ERROR [ladesaeulen.cli] Invalid timeoutMs: Must be >= 0.");
 });
 
 test("parity() drives the same input through run() and the library on one transport", async () => {

@@ -36,7 +36,8 @@ src/
     client.ts    # LadesaeulenClient (stations / count / geojson / countBy / fields / layerInfo)
     index.ts
   cli/
-    io.ts        # injectable I/O (CliDeps / CliIO) — no env seam (no auth)
+    io.ts        # injectable I/O (CliDeps / CliIO) — no env seam (no auth); the logger and the clock
+    log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     shared.ts    # option parsers (incl. --near lat,lon), global->engine mapping, render
     commands/stations.ts  # stations / count-by / info / fields
     program.ts   # assembles the commander program
@@ -159,7 +160,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `Problem` type (`(value) => string | undefined`) and `assertValid(name, value,
   problem)`, which throws `LadesaeulenValidationError` (`Invalid <name>: <reason>`).
   A rejected input sends no request; `run.ts` maps the error to exit 2
-  (`Error: <message>`). The CLI makes a single-value option given twice a usage error
+  (an `ERROR` record of `ladesaeulen.cli`). The CLI makes a single-value option given twice a usage error
   (`forbidRepeatedOptions` in `shared.ts`): commander kept the last `--where` silently.
   `test/conformance-p10-strict-filters.test.ts` checks unknown keys, wrong-typed values
   and repeated options.
@@ -232,11 +233,12 @@ true`), `-p6-retry-policy` (`ABOVE_CAP = "fail"`), `-p7-pipes-exit-codes` (runs 
 built bin), `-p8-p9-p13-responses-and-errors` and `-p10-strict-filters` (the filter-name
 cases empty: ArcGIS rejects an unknown column itself). The follow-up round of 2026-10-06
 added P20 (`conformance-p20-cleartext-warning`: a remote plain `http:` base URL gets one
-`warning:` line on stderr from the library's `cleartextProblem`, printed by `action()` in
+`WARN` record of `ladesaeulen.http` on stderr from the library's `cleartextProblem`, printed by `action()` in
 `shared.ts` before the client is built; no base-URL variable and no secret here, so those
 two cases are skipped) and P21 (`conformance-p21-readme-links`: every relative link in
 `README.md` points to a file `package.json` `files` ships, since npmjs.com shows the README;
-other documents are linked by their GitHub URL).
+other documents are linked by their GitHub URL). P23 (`conformance-p23-log-format`, 2026-10-09)
+checks that every stderr line is a log record and `--log-format text|jsonl`.
 
 ## Conventions to keep
 
@@ -268,3 +270,16 @@ npm run build                        # the CLI, for the command reference
 cd site && npm ci && bundle install  # once (Node >= 22.12, Ruby 3.4, Bundler)
 npm run serve                        # http://127.0.0.1:4000/ladesaeulenregister-cli/
 ```
+
+## The log on stderr
+
+Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp, a level
+(`ERROR`, `WARN`, `INFO`) and a topic, `ladesaeulen.<area>`. `--log-format text` (the default)
+writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
+`--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
+and `msg`. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
+with `io.err` directly. `run()` builds the logger from argv before commander parses it,
+so commander's own usage errors are records too, and on top of the redacted `io.err`, so
+a secret is kept out of the log in either format. `CliDeps.now` makes the timestamps
+testable. stdout carries data only. Conformance test P23 checks all of this, and its
+body is shared across the *-cli repos.

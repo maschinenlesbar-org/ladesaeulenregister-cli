@@ -12,12 +12,13 @@ ladesaeulen [global options] <command> [command options]
 
 | Option | Description |
 |---|---|
-| `--base-url <url>` | API base URL (the ArcGIS FeatureServer); `http:`/`https:` only, no query (`?`), fragment (`#`) or surrounding whitespace, and a `%` in a user name or password must be an escape (write a literal `%` as `%25`); anything else is a usage error (exit 2) before any request. A plain `http:` URL to a non-loopback host (not `localhost`, `127.0.0.0/8`, `::1`) gets one `warning: … sent unencrypted (http:, not https:)` line on stderr naming the host (and the URL's credentials, never printed); stdout and the exit code are unchanged |
+| `--base-url <url>` | API base URL (the ArcGIS FeatureServer); `http:`/`https:` only, no query (`?`), fragment (`#`) or surrounding whitespace, and a `%` in a user name or password must be an escape (write a literal `%` as `%25`); anything else is a usage error (exit 2) before any request. A plain `http:` URL to a non-loopback host (not `localhost`, `127.0.0.0/8`, `::1`) gets one `WARN` record of `ladesaeulen.http` (`… sent unencrypted (http:, not https:)`) on stderr naming the host (and the URL's credentials, never printed); stdout and the exit code are unchanged |
 | `--timeout <ms>` | time limit per request in ms, whole response included (default 30000 = 30 s; 0 = no timeout; at most 2147483647) |
 | `--user-agent <ua>` | User-Agent header value (not blank; Latin-1 text without control characters) |
 | `--max-retries <n>` | retries for transient 429/503 responses and reset connections (0..10, default 2). Each retry backs off 200 ms, 400 ms, …, or waits the server's `Retry-After` (seconds or an HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried — the error is reported at once and names the wait the server asked for. A connection reset mid-request (`socket hang up`, `ECONNRESET`, a body cut off mid-way) is retried the same way, with the linear backoff, for a GET (a long `--where` sent as a form POST is not re-sent); a run that recovers exits 0. A status or reset that persists ends the message with `(after N retries)`. Other network errors (a refused connection, DNS, a timeout) are not retried |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
 | `--compact` | print JSON on a single line (for piping to `jq`) |
+| `--log-format <format>` | how errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [ladesaeulen.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
 | `-V, --version` / `-h, --help` | version / help |
 
 ## Commands
@@ -69,7 +70,7 @@ always empty), so cite `dataLastEditDate` with an answer.
 `--fields` and `count-by`. Sixteen of the listed columns are `null` on every row (the
 `evses_*` per-connector columns, `documentDate`, `documentTime`, `json_type`,
 `Steckersystem_Ladepunkt7..10`; see GLOSSARY.md): `fields` names them on stderr, and
-`stations`/`count-by` print a `Note: … is empty on every row` line when a filter, sort,
+`stations`/`count-by` log an `INFO` record (`… is empty on every row`) when a filter, sort,
 field list or group names one, since its `0` or single `null` group is not an answer.
 
 ## The `--where` filter

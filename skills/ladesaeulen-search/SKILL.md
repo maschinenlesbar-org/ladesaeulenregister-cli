@@ -121,7 +121,7 @@ ladesaeulen stations --count
   with `LIKE '%…%'` rather than `=`.
 - **Don't filter on the `evses_*` columns, `documentDate` or `json_type`.** They are listed
   by `ladesaeulen fields` but empty on every row, so a filter on them gives `0` (the CLI
-  prints a `Note: … is empty on every row` line); per-connector power comes from
+  logs an `INFO` record `… is empty on every row` on stderr); per-connector power comes from
   `--min-point-kw`.
 - **Default columns are curated** — pass `--fields '*'` for everything (includes a
   large raw JSON blob per row).

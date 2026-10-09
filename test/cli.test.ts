@@ -4,7 +4,7 @@ import { run } from "../src/cli/run.js";
 import { LadesaeulenClient } from "../src/client/client.js";
 import type { CliDeps } from "../src/cli/io.js";
 import type { HttpRequest, HttpResponse } from "../src/client/http.js";
-import { makeMockTransport, jsonResponse, queryOf } from "./helpers.js";
+import { makeMockTransport, jsonResponse, queryOf, untimed } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
 function makeCli(responder: (req: HttpRequest) => HttpResponse) {
@@ -235,7 +235,7 @@ test("a string ArcGIS error in a 200 reply exits 1 with its text", async () => {
   const cli = makeCli(() => jsonResponse({ error: "Token Required" }));
   assert.equal(await run(["stations"], cli.deps), 1);
   assert.deepEqual(cli.out, []);
-  assert.match(cli.err.join("\n"), /^Error: ArcGIS error for GET \S+: Token Required$/);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.api\] ArcGIS error for GET \S+: Token Required$/);
 });
 
 test("fields and count-by with null entries exit 1 with a parse error, not 'Unexpected error'", async () => {
@@ -245,7 +245,7 @@ test("fields and count-by with null entries exit 1 with a parse error, not 'Unex
   ] as const) {
     const cli = makeCli(() => jsonResponse(body));
     assert.equal(await run([...argv], cli.deps), 1);
-    assert.match(cli.err.join("\n"), /^Error: Unexpected response shape from /);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.cli\] Unexpected response shape from /);
   }
 });
 
@@ -255,8 +255,8 @@ test("the truncation note blames --limit when the page is as long as the limit",
   );
   assert.equal(await run(["stations", "--limit", "2"], cli.deps), 0);
   assert.equal(
-    cli.err.join("\n"),
-    "Note: more stations match than the 2 returned (--limit 2). Page with --offset, or raise --limit.",
+    untimed(cli.err.join("\n")),
+    "INFO  [ladesaeulen.api] more stations match than the 2 returned (--limit 2). Page with --offset, or raise --limit.",
   );
 });
 
@@ -275,8 +275,8 @@ test("count-by prints a note when the server cut the group list", async () => {
   const cli = makeCli(() => jsonResponse({ ...fx.countByState, exceededTransferLimit: true }));
   assert.equal(await run(["count-by", "state"], cli.deps), 0);
   assert.equal(
-    cli.err.join("\n"),
-    "Note: more groups exist than the 3 returned (the server caps a result at ~2000 groups). " +
+    untimed(cli.err.join("\n")),
+    "INFO  [ladesaeulen.api] more groups exist than the 3 returned (the server caps a result at ~2000 groups). " +
       "The largest groups are all there; narrow --where to see the rest.",
   );
   assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
@@ -366,7 +366,7 @@ test("an error a custom transport throws is a network error: exit 6, not 'Unexpe
   });
   const code = await run(["stations", "--count"], cli.deps);
   assert.equal(code, 6);
-  assert.match(cli.err.join("\n"), /^Error: GET .* failed: read ECONNRESET/);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.http\] GET .* failed: read ECONNRESET/);
   assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
 });
 
@@ -396,10 +396,10 @@ test("a filter or group on a column the register never fills gets a stderr note,
   const col = "evses_evse_connectors_connector___max_electric_power_connector";
   const cli = makeCli(() => jsonResponse(fx.countOnly));
   assert.equal(await run(["stations", "--where", `${col} >= 150`, "--count"], cli.deps), 0);
-  assert.match(cli.err.join("\n"), new RegExp(`^Note: ${col} is empty on every row of the register`));
+  assert.match(untimed(cli.err.join("\n")), new RegExp(`^INFO  \\[ladesaeulen\\.api\\] ${col} is empty on every row of the register`));
   const grouped = makeCli(() => jsonResponse({ features: [{ attributes: { documentDate: null, count: 117584 } }] }));
   assert.equal(await run(["count-by", "documentDate"], grouped.deps), 0);
-  assert.match(grouped.err.join("\n"), /Note: documentDate is empty on every row/);
+  assert.match(untimed(grouped.err.join("\n")), /^INFO  \[ladesaeulen\.api\] documentDate is empty on every row/);
   // Steckersystem_Ladepunkt1 is filled; it must not be mistaken for Steckersystem_Ladepunkt10.
   const quiet = makeCli(() => jsonResponse(fx.countOnly));
   assert.equal(await run(["stations", "--where", "Steckersystem_Ladepunkt1 LIKE '%DC%'", "--count"], quiet.deps), 0);
@@ -411,5 +411,5 @@ test("fields notes the columns that are empty on every row", async () => {
     jsonResponse({ fields: [{ name: "Ort", type: "esriFieldTypeString" }, { name: "json_type", type: "esriFieldTypeString" }] }),
   );
   assert.equal(await run(["fields"], cli.deps), 0);
-  assert.equal(cli.err.join("\n"), "Note: 1 of these columns are empty on every row of the register (checked 2026-10-06): json_type.");
+  assert.equal(untimed(cli.err.join("\n")), "INFO  [ladesaeulen.api] 1 of these columns are empty on every row of the register (checked 2026-10-06): json_type.");
 });

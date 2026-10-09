@@ -3,7 +3,7 @@
 // and `fields` to list the queryable columns.
 
 import type { Command } from "commander";
-import type { CliDeps } from "../io.js";
+import { logOf, type CliDeps } from "../io.js";
 import type { StationQuery } from "../../client/types.js";
 import { LadesaeulenValidationError } from "../../client/errors.js";
 import { DEFAULT_LIMIT, MAX_LIMIT } from "../../client/client.js";
@@ -37,15 +37,15 @@ function isOutsideGermany(lat: number, lon: number): boolean {
 function truncationNote(rows: number, limit: number, filtered = false): string {
   if (filtered) {
     return (
-      `Note: more stations may match than the ${rows} returned: --min-point-kw checked one page of ` +
+      `more stations may match than the ${rows} returned: --min-point-kw checked one page of ` +
       `candidates (--limit ${limit}, the server sends at most ~2000). Page with --offset, or raise --limit.`
     );
   }
   if (rows >= limit) {
-    return `Note: more stations match than the ${rows} returned (--limit ${limit}). Page with --offset, or raise --limit.`;
+    return `more stations match than the ${rows} returned (--limit ${limit}). Page with --offset, or raise --limit.`;
   }
   return (
-    "Note: more stations match than were returned (the server caps a page at ~2000 rows). " +
+    "more stations match than were returned (the server caps a page at ~2000 rows). " +
     "Page with --offset, or narrow --where."
   );
 }
@@ -58,8 +58,9 @@ function truncationNote(rows: number, limit: number, filtered = false): string {
 function emptyFieldsNote(deps: CliDeps, texts: Array<string | undefined>): void {
   const names = [...new Set(texts.flatMap((t) => (t === undefined ? [] : emptyFieldsIn(t))))];
   if (names.length === 0) return;
-  deps.io.err(
-    `Note: ${names.join(", ")} ${names.length === 1 ? "is" : "are"} empty on every row of the register ` +
+  logOf(deps).info(
+    "api",
+    `${names.join(", ")} ${names.length === 1 ? "is" : "are"} empty on every row of the register ` +
       "(checked 2026-10-06), so a filter on it matches nothing and a group on it is one null group.",
   );
 }
@@ -147,8 +148,9 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         const q = buildStationQuery(opts);
         emptyFieldsNote(deps, [q.where, q.orderBy, q.outFields]);
         if (q.near && isOutsideGermany(q.near.lat, q.near.lon)) {
-          deps.io.err(
-            `Note: --near point (lat ${q.near.lat}, lon ${q.near.lon}) is outside Germany — ` +
+          logOf(deps).info(
+            "cli",
+            `--near point (lat ${q.near.lat}, lon ${q.near.lon}) is outside Germany — ` +
               "did you swap latitude and longitude? --near expects lat,lon.",
           );
         }
@@ -158,13 +160,13 @@ export function registerCommands(program: Command, deps: CliDeps): void {
           const collection = await client.geojson(q);
           // ArcGIS puts the flag on the FeatureCollection's `properties`.
           if (collection.properties?.exceededTransferLimit === true) {
-            deps.io.err(truncationNote(collection.features.length, q.limit ?? DEFAULT_LIMIT, q.minChargePointKw !== undefined));
+            logOf(deps).info("api", truncationNote(collection.features.length, q.limit ?? DEFAULT_LIMIT, q.minChargePointKw !== undefined));
           }
           renderJson(deps, global, collection);
         } else {
           const page = await client.stations(q);
           if (page.exceededTransferLimit) {
-            deps.io.err(truncationNote(page.features.length, q.limit ?? DEFAULT_LIMIT, q.minChargePointKw !== undefined));
+            logOf(deps).info("api", truncationNote(page.features.length, q.limit ?? DEFAULT_LIMIT, q.minChargePointKw !== undefined));
           }
           renderJson(deps, global, page);
         }
@@ -182,8 +184,9 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         emptyFieldsNote(deps, [field, where]);
         const page = await client.countByPage(field!, where);
         if (page.exceededTransferLimit) {
-          deps.io.err(
-            `Note: more groups exist than the ${page.groups.length} returned (the server caps a result at ~2000 ` +
+          logOf(deps).info(
+            "api",
+            `more groups exist than the ${page.groups.length} returned (the server caps a result at ~2000 ` +
               "groups). The largest groups are all there; narrow --where to see the rest.",
           );
         }
@@ -208,8 +211,9 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         const fields = await client.fields();
         const empty = fields.filter((f) => EMPTY_FIELDS.includes(f.name)).map((f) => f.name);
         if (empty.length > 0) {
-          deps.io.err(
-            `Note: ${empty.length} of these columns are empty on every row of the register (checked 2026-10-06): ` +
+          logOf(deps).info(
+            "api",
+            `${empty.length} of these columns are empty on every row of the register (checked 2026-10-06): ` +
               `${empty.join(", ")}.`,
           );
         }

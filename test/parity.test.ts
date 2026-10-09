@@ -107,7 +107,7 @@ test("parity: stations --count with a paging, sort or field option is rejected b
     assert.equal(cli.requests.length, 0);
     assert.equal(
       cli.err,
-      `Error: --count cannot be combined with ${flags}: it counts every match, so paging, sorting and field options do not apply.`,
+      `ERROR [ladesaeulen.cli] --count cannot be combined with ${flags}: it counts every match, so paging, sorting and field options do not apply.`,
     );
     assert.equal(res.ok, false);
     assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError);
