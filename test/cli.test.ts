@@ -426,3 +426,14 @@ test("an a:b@c argument (a User-Agent, a rejected value) is neither a credential
   assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
   assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
 });
+
+test("a run with options but no command logs an ERROR \"missing command\", then the help one INFO record per line (L5)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["--compact"], cli.deps), 2);
+  const records = cli.err.map(untimed);
+  assert.equal(records[0], "ERROR [ladesaeulen.cli] missing command: `ladesaeulen <subcommand>`");
+  assert.ok(records.length > 3, records.join("\n"));
+  for (const record of records.slice(1)) assert.match(record, /^INFO  \[ladesaeulen\.cli\] .*\S$/);
+  assert.ok(records.some((record) => /\] Usage: ladesaeulen /.test(record)), records.join("\n"));
+  assert.deepEqual(cli.out, []);
+});

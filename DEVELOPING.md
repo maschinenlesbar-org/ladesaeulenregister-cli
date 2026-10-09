@@ -305,7 +305,11 @@ code point and ends in `… (N more characters)`. The library's error messages k
 breaks (`sanitizeServerText` strips only the other controls, and the ArcGIS `error`
 envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
 with `io.err` directly. `run()` builds the logger from argv before commander parses it,
-so commander's own usage errors are records too, and with the run's redaction
+so commander's own usage errors are records too: its `error: …` an ERROR of `cli` (a
+`(Did you mean …?)` line joined to it), the help it shows after one an INFO record per
+line, and a run with options but no command an ERROR "missing command:
+`ladesaeulen <subcommand>`" before that help, so every failed run has an ERROR record
+(`writeCommanderErr`). The log is built with the run's redaction
 (`withRedactedOutput`), which replaces a secret in the message only, before it is
 escaped: the frame is never touched, and a secret is kept out of the log in either format. `CliDeps.now` makes the timestamps
 testable. stdout carries data only. Conformance test P23 checks all of this, and its
