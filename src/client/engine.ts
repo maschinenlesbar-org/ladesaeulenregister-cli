@@ -243,13 +243,14 @@ function isLoopbackHost(hostname: string): boolean {
 }
 
 /**
- * What travels unencrypted when requests go to `baseUrl`, as one sentence for a
- * `warning: ` line — or `undefined` when nothing does: an `https:` URL, a URL that does
+ * What travels unencrypted when requests go to `baseUrl`, as one sentence — or
+ * `undefined` when nothing does: an `https:` URL, a URL that does
  * not parse (the base-URL check reports that), or a loopback host (`localhost`,
  * `127.0.0.0/8`, `::1`). The sentence names the host (`url.host`, host and port) and what
  * is sent with each request: the base URL's own credentials (userinfo) and any other
  * secret passed as a noun phrase in `secrets` (e.g. `"the API key"`). It never contains
- * a password or key. The CLI prints it once per run, before the first request.
+ * a password or key. The CLI logs it as a `WARN` record of `ladesaeulen.http` on stderr
+ * (once per run, before the first request).
  */
 export function cleartextProblem(baseUrl: string, secrets: readonly string[] = []): string | undefined {
   let url: URL;
