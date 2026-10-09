@@ -24,6 +24,7 @@ import {
   LadesaeulenValidationError,
   credentialsIn,
   cutForMessage,
+  cutText,
   redactCredentials,
   redactUrl,
 } from "./errors.js";
@@ -664,7 +665,7 @@ export class RequestEngine {
       // snippet of a textual body; skip HTML pages (start with "<").
       const snippet = text.trim().replace(/\s+/g, " ");
       if (snippet.length > 0 && !snippet.startsWith("<")) {
-        detail = snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
+        detail = snippet.length > 200 ? `${cutText(snippet, 200)}…` : snippet;
       }
     }
     // `detail` came from the attacker-controlled response body; strip control

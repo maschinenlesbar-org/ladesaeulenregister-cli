@@ -6,7 +6,10 @@ import {
   LadesaeulenNetworkError,
   LadesaeulenParseError,
   LadesaeulenValidationError,
+  cutText,
+  toWellFormed,
 } from "../src/client/errors.js";
+import { LadesaeulenClient } from "../src/client/client.js";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "./fixtures.js";
 
@@ -375,6 +378,27 @@ test("server text and long URLs are cut at 500 characters in messages, kept whol
   assert.ok(err.message.length < 1200, String(err.message.length));
   assert.ok(err.body.includes(long));
   assert.ok(err.url.length > 1500);
+});
+
+test("cutText never cuts inside a surrogate pair; toWellFormed replaces half a character", () => {
+  assert.equal(cutText("ab\u{1f600}cd", 3), "ab");
+  assert.equal(cutText("ab\u{1f600}cd", 4), "ab\u{1f600}");
+  assert.equal(cutText("short", 10), "short");
+  assert.equal(toWellFormed("a\ud83d b\ude00 \u{1f600}"), "a\ufffd b\ufffd \u{1f600}");
+});
+
+test("server text cut at 500 (ArcGIS envelope) or 200 characters (a plain body) keeps the message well-formed", async () => {
+  const answers = [
+    jsonResponse({ error: { code: 400, message: "a" + "\u{1f600}".repeat(400) } }),
+    rawResponse("a" + "\u{1f600}".repeat(400), "text/plain", 500),
+  ];
+  for (const answer of answers) {
+    const client = new LadesaeulenClient({ transport: makeMockTransport(() => answer).transport });
+    const err = await client.count().catch((e: unknown) => e);
+    assert.ok(err instanceof LadesaeulenApiError);
+    assert.equal(toWellFormed(err.message), err.message);
+    assert.match(err.message, /…$/);
+  }
 });
 
 test("cleartextProblem: exact wording, host with port, loopback range, never the secret", () => {
