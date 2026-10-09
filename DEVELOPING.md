@@ -131,12 +131,15 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `LadesaeulenValidationError` (`Invalid baseUrl: …`), not a network error.
   `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
   transport's per-hop scheme check and real transport failures.
-  **The CLI redacts credentials on output:** `run.ts` (`withRedactedOutput`) takes the
+  **The CLI redacts credentials on output:** `run.ts` (`redactionFor`, `withRedactedOutput`) takes the
   exact userinfo of every argument (`credentialsIn`, exported) and replaces it with
   `***` in everything it prints — commander's usage errors, which echo rejected values
   (`argument '<url>' is invalid`, `unknown command '<url>'`, `too many arguments … got
   1: <url>`), the help that follows them, and API errors — so a password with spaces,
-  quotes, `#`, `?` or `/` is caught as well as an ordinary one. `redactUrl` falls back to
+  quotes, `#`, `?` or `/` is caught as well as an ordinary one. The log replaces them in
+  each record's *message*, before the record is cut and escaped, and writes it to the raw
+  stderr: the frame (time, level, topic) is never touched, and a password with DEL, C1 or
+  bidi characters is matched in its raw form. `redactUrl` falls back to
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
   `test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
   nine argv positions.
@@ -294,7 +297,8 @@ code point and ends in `… (N more characters)`. The library's error messages k
 breaks (`sanitizeServerText` strips only the other controls, and the ArcGIS `error`
 envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
 with `io.err` directly. `run()` builds the logger from argv before commander parses it,
-so commander's own usage errors are records too, and on top of the redacted `io.err`, so
-a secret is kept out of the log in either format. `CliDeps.now` makes the timestamps
+so commander's own usage errors are records too, and with the run's redaction
+(`withRedactedOutput`), which replaces a secret in the message only, before it is
+escaped: the frame is never touched, and a secret is kept out of the log in either format. `CliDeps.now` makes the timestamps
 testable. stdout carries data only. Conformance test P23 checks all of this, and its
 body is shared across the *-cli repos.
