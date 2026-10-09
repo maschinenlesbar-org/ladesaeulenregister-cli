@@ -103,7 +103,9 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **The client validates its own arguments** before any request (not only the CLI):
   `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
-  non-blank `countBy` field, and no key outside `STATION_QUERY_KEYS` (`where`,
+  `countBy` field that is one column name (letters, digits and `_`: no list, no line
+  break, space, bracket or quote, which the live server answered with a body that was
+  not JSON), and no key outside `STATION_QUERY_KEYS` (`where`,
   `outFields`, `limit`, `offset`, `orderBy`, `near`) or `near`'s `lat`/`lon`/`radiusKm`
   — a misspelled `wher`, a `Where` or a `__proto__` from JSON used to be dropped and the
   call answered for every station → `LadesaeulenValidationError`

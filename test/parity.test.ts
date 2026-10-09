@@ -360,3 +360,17 @@ test("parity: a malformed base URL is rejected by both as a validation error, no
     assert.equal(res.requests.length, 0);
   }
 });
+
+test("parity: count-by with a field that is no single column name is a usage error in both, nothing sent (B05-1)", async () => {
+  const { cli, lib: res } = await parity(
+    ["count-by", "Ort\nx"],
+    (transport) => new LadesaeulenClient({ transport }).countBy("Ort\nx"),
+    () => jsonResponse(fx.countByState),
+  );
+  assert.equal(cli.code, 2);
+  assert.equal(cli.requests.length, 0);
+  assert.equal(cli.err, 'ERROR [ladesaeulen.cli] Invalid field: expected one column name (letters, digits and _), got "Ort\\nx".');
+  assert.equal(res.ok, false);
+  assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError);
+  assert.equal(res.requests.length, 0);
+});

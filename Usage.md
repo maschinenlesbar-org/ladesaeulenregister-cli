@@ -52,7 +52,9 @@ map.
 `ladesaeulen count-by state` → `[{ value, count }, …]`, sorted by count desc. Add
 `--where` to aggregate a subset. It groups by **one** field: a comma-separated list
 (`state,Typ`) is a usage error — group by one field and fix the other with `--where`
-(`count-by state --where "Typ='Schnellladeeinrichtung'"`). Good fields: `state`, `Typ`, `operator_companyName`, `Ort`
+(`count-by state --where "Typ='Schnellladeeinrichtung'"`). The field is one column name
+as `fields` lists it (letters, digits and `_`); anything else — a line break, a space, an
+expression such as `UPPER(Ort)` — is a usage error (exit 2) before any request. Good fields: `state`, `Typ`, `operator_companyName`, `Ort`
 (`Betreiber` is `null` on more than half of the stations). The result stops at 2,000
 groups (the server's page limit; the CLI then prints a stderr note); the top groups are
 still correct because the server sorts by count first.

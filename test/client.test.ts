@@ -195,6 +195,26 @@ test("countBy() refuses a field list with a validation error and sends nothing",
   assert.equal(mt.calls.length, 0);
 });
 
+test("countBy() refuses a field name that is no single column name (a line break, a space, a bracket) and sends nothing", async () => {
+  // The live server answered a group-by field with a line break with something that was not
+  // JSON ("Failed to parse JSON response from /0/query", 2026-10-09 result 05 B05-1).
+  for (const field of ["Ort\nx", "Ort x", "Ort)", "UPPER(Ort)", "Ort;--", "\"Ort\""]) {
+    const { client, mt } = clientFor(fx.countByState);
+    await assert.rejects(
+      () => client.countBy(field),
+      (err) =>
+        err instanceof LadesaeulenValidationError &&
+        err.message === `Invalid field: expected one column name (letters, digits and _), got ${JSON.stringify(field)}.`,
+      JSON.stringify(field),
+    );
+    assert.equal(mt.calls.length, 0, JSON.stringify(field));
+  }
+  for (const field of ["state", "Straße", "Steckersystem_Ladepunkt1", "operator_companyName", "_x"]) {
+    const { client } = clientFor({ features: [{ attributes: { [field]: "v", count: 1 } }] });
+    assert.deepEqual(await client.countBy(field), [{ value: "v", count: 1 }], field);
+  }
+});
+
 test("countBy() reads a group value echoed in another case, and rejects a group without it", async () => {
   const { client } = clientFor({ features: [{ attributes: { state: "Bremen", count: 884 } }] });
   assert.deepEqual(await client.countBy("STATE"), [{ value: "Bremen", count: 884 }]);

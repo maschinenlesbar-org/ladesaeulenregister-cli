@@ -55,10 +55,17 @@ export const DEFAULT_FIELDS = [
   "Bezahlsystem",
 ].join(",");
 
+/** One column name of the layer: letters (umlauts and ß included), digits and `_`. */
+const COLUMN_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
+
 /**
  * Check and trim a `countBy` field name. ArcGIS groups by a comma-separated list
  * too, but each group then carries several values and `CountByRow` has room for
  * one, so a list is refused rather than returning `value: null` for every group.
+ * Anything else that is not one column name (a line break, a space, a bracket, a
+ * quote) is refused too: the server answered a field with a line break with a body
+ * that was not JSON, and an expression would come back under another name than the
+ * one `countBy` reads the groups from.
  */
 function groupField(field: string): string {
   const name = typeof field === "string" ? field.trim() : "";
@@ -70,6 +77,9 @@ function groupField(field: string): string {
       `Invalid field: expected one field name, got a list: ${show(name)}. ` +
         "Group by one field and restrict the others with a where filter.",
     );
+  }
+  if (!COLUMN_NAME.test(name)) {
+    throw new LadesaeulenValidationError(`Invalid field: expected one column name (letters, digits and _), got ${show(name)}.`);
   }
   return name;
 }
