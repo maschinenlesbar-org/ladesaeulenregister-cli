@@ -154,7 +154,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `defaultHeaders` that is not an object. Messages cut a URL or server text at
   `MAX_MESSAGE_VALUE_LENGTH` (500) characters (`cutForMessage`), a plain-text error body
   at 200, never inside a surrogate pair (`cutText`), so the message stays well-formed;
-  `url` and `body` keep the full value. `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
+  `url` and `body` keep the full value. Every other value an own message quotes from
+  a server answer or the caller's input (a charset, a field or key name, a header
+  name, a rejected value) is cut at `MAX_MESSAGE_VALUE_LENGTH` too, so `err.message`
+  stays bounded for a library caller. `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
   charset, the 2xx shapes and fifteen wrong-typed calls.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
@@ -285,8 +288,9 @@ the message (text) or the whole JSON object (jsonl), which writes CR and LF as `
 every other C0 control but TAB, DEL and C1 as `\u00XX`, and U+2028, U+2029 and the bidi
 controls as `\uXXXX`, so no text that reaches a record, by whatever path, can split it,
 forge another one or steer the terminal. Before that a lone surrogate (half a
-character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`).
-The library's error messages keep a server's line
+character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellFormed`),
+and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cut at a
+code point and ends in `… (N more characters)`. The library's error messages keep a server's line
 breaks (`sanitizeServerText` strips only the other controls, and the ArcGIS `error`
 envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
 with `io.err` directly. `run()` builds the logger from argv before commander parses it,

@@ -699,7 +699,7 @@ export function decodeBody(body: Buffer, contentType: string, path: string): str
   try {
     decoder = new TextDecoder(charset);
   } catch {
-    throw new LadesaeulenParseError(`Unsupported response charset "${sanitizeServerText(charset)}" from ${path}.`);
+    throw new LadesaeulenParseError(`Unsupported response charset "${cutForMessage(sanitizeServerText(charset))}" from ${path}.`);
   }
   return decoder.decode(body);
 }

@@ -11,7 +11,7 @@
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
 import { RequestEngine, type EngineOptions } from "./engine.js";
-import { LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
+import { LadesaeulenParseError, LadesaeulenValidationError, cutForMessage } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import { assertValid, countQueryProblem } from "./validate.js";
 import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw } from "./power.js";
@@ -63,11 +63,11 @@ export const DEFAULT_FIELDS = [
 function groupField(field: string): string {
   const name = typeof field === "string" ? field.trim() : "";
   if (name === "") {
-    throw new LadesaeulenValidationError(`Invalid field: expected a field name, got ${JSON.stringify(field)}.`);
+    throw new LadesaeulenValidationError(`Invalid field: expected a field name, got ${show(field)}.`);
   }
   if (name.includes(",")) {
     throw new LadesaeulenValidationError(
-      `Invalid field: expected one field name, got a list: ${JSON.stringify(name)}. ` +
+      `Invalid field: expected one field name, got a list: ${show(name)}. ` +
         "Group by one field and restrict the others with a where filter.",
     );
   }
@@ -86,7 +86,7 @@ function groupValue(attributes: Record<string, unknown>, field: string, path: st
   const keys = Object.keys(attributes).filter((k) => k.toLowerCase() === lower);
   if (keys.length === 1) return attributes[keys[0]!];
   throw new LadesaeulenParseError(
-    `Unexpected response shape from ${path}: expected the group-by field ${JSON.stringify(field)} in every group, group ${i} has none.`,
+    `Unexpected response shape from ${path}: expected the group-by field ${show(field)} in every group, group ${i} has none.`,
   );
 }
 
@@ -180,7 +180,7 @@ export const DEFAULT_LIMIT = 50;
 
 /** A value as it appears in a validation message: strings quoted, the rest as is. */
 function show(value: unknown): string {
-  return typeof value === "string" ? JSON.stringify(value) : String(value);
+  return typeof value === "string" ? JSON.stringify(cutForMessage(value)) : cutForMessage(String(value));
 }
 
 function invalid(name: string, expected: string, value: unknown): LadesaeulenValidationError {
@@ -231,7 +231,7 @@ function checkKeys(name: string, value: object, known: readonly string[]): void 
     if (known.includes(key)) continue;
     const near = known.find((k) => k.toLowerCase() === key.toLowerCase());
     const hint = near !== undefined ? ` Did you mean "${near}"?` : ` Known keys: ${known.join(", ")}.`;
-    throw new LadesaeulenValidationError(`Invalid ${name}: unknown key ${JSON.stringify(key)}.${hint}`);
+    throw new LadesaeulenValidationError(`Invalid ${name}: unknown key ${show(key)}.${hint}`);
   }
 }
 

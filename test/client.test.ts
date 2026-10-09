@@ -417,3 +417,14 @@ test("layerInfo() reads the layer's edit dates as ISO 8601 (the register's as-of
   assert.deepEqual(await bare.client.layerInfo(), { name: null, lastEditDate: null, dataLastEditDate: null, maxRecordCount: null });
   await assert.rejects(clientFor({ name: "x" }).client.layerInfo(), LadesaeulenParseError);
 });
+
+test("own messages quote a user or server value at most MAX_MESSAGE_VALUE_LENGTH characters long (L3)", async () => {
+  const long = "x".repeat(5000);
+  const mt = makeMockTransport(() => rawResponse("{}", `application/json; charset=${long}`));
+  const client = new LadesaeulenClient({ transport: mt.transport });
+  const bounded = (err: unknown): boolean => err instanceof Error && err.message.length < 700 && /x…/.test(err.message);
+  await assert.rejects(client.countBy(`a,${long}`), bounded);
+  await assert.rejects(client.stations({ [long]: 1 } as never), bounded);
+  await assert.rejects(client.count(), bounded);
+  assert.throws(() => new LadesaeulenClient({ transport: mt.transport, defaultHeaders: { [`${long} x`]: "v" } }), bounded);
+});
