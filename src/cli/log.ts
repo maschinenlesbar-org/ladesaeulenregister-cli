@@ -7,7 +7,7 @@
 //
 // The text form follows log4j's pattern (`%d %-5p [%c] %m`), with the time in UTC
 // ISO 8601. The topic is a dotted logger name: the program, then the area the record
-// comes from (`ladesaeulen.cli`, `ladesaeulen.api`, `ladesaeulen.http`, `ladesaeulen.config`, …). stdout carries data
+// comes from (`ladesaeulen.cli`, `ladesaeulen.api`, `ladesaeulen.http`, `ladesaeulen.output`). stdout carries data
 // only and is not touched; neither is `--help`/`--version`, nor the no-echo prompt.
 
 import { cutText, toWellFormed } from "../client/errors.js";
