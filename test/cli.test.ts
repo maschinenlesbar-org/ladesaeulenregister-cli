@@ -246,7 +246,7 @@ test("fields and count-by with null entries exit 1 with a parse error, not 'Unex
   ] as const) {
     const cli = makeCli(() => jsonResponse(body));
     assert.equal(await run([...argv], cli.deps), 1);
-    assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.cli\] Unexpected response shape from /);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.api\] Unexpected response shape from /);
   }
 });
 

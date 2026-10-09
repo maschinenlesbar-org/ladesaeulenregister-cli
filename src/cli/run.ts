@@ -10,6 +10,7 @@ import {
   LadesaeulenApiError,
   LadesaeulenError,
   LadesaeulenNetworkError,
+  LadesaeulenParseError,
   LadesaeulenValidationError,
   credentialsIn,
   echoedCredentialForms,
@@ -264,7 +265,10 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
       return EXIT.NETWORK;
     }
     if (err instanceof LadesaeulenError) {
-      log.error("cli", err.message);
+      // A malformed answer (bad JSON, the wrong shape, an empty body, an unknown charset)
+      // is the API's answer as much as an error status is: `api`, like the ArcGIS
+      // `error` envelope on HTTP 200.
+      log.error(err instanceof LadesaeulenParseError ? "api" : "cli", err.message);
       return EXIT.OTHER;
     }
     log.error("cli", `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
