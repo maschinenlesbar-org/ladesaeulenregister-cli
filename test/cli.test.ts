@@ -365,7 +365,8 @@ test("an error a custom transport throws is a network error: exit 6, not 'Unexpe
   const cli = makeCli(() => {
     throw Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
   });
-  const code = await run(["stations", "--count"], cli.deps);
+  // no retries: each one would be a WARN record first (test/retry-log.test.ts)
+  const code = await run(["--max-retries", "0", "stations", "--count"], cli.deps);
   assert.equal(code, 6);
   assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.http\] GET .* failed: read ECONNRESET/);
   assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);

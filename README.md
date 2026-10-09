@@ -80,6 +80,7 @@ characters is cut and ends in `… (N more characters)`:
 
 ```text
 2026-10-09T14:03:12.481Z WARN  [ladesaeulen.http] requests to mirror.test are sent unencrypted (http:, not https:)
+2026-10-09T14:03:12.700Z WARN  [ladesaeulen.http] HTTP 503 from services-eu1.arcgis.com: retry 1 of 2 in 200 ms
 2026-10-09T14:03:12.902Z INFO  [ladesaeulen.api] more stations match than the 50 returned (--limit 50). Page with --offset, or raise --limit.
 ```
 
