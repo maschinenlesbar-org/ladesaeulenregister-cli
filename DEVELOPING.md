@@ -139,7 +139,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   quotes, `#`, `?` or `/` is caught as well as an ordinary one. The log replaces them in
   each record's *message*, before the record is cut and escaped, and writes it to the raw
   stderr: the frame (time, level, topic) is never touched, and a password with DEL, C1 or
-  bidi characters is matched in its raw form. `redactUrl` falls back to
+  bidi characters is matched in its raw form. The forms a server echoes a userinfo back
+  in are replaced too: the `Basic` value and the decoded `user:password` on stdout and
+  stderr, the password alone (4 characters or more) on stderr only, since it may well
+  occur in the data. `redactUrl` falls back to
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
   `test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
   nine argv positions.
@@ -149,7 +152,9 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `.message` read `http://***@host/…`, on the ArcGIS `error` envelope, an HTTP error and
   the POST path alike), and server or transport text that echoes the URL — an error
   body, `detail`, a transport's error message and its `cause` chain — has the userinfo
-  (raw and percent-decoded) scrubbed. `test/conformance-p2-library-redaction.test.ts`
+  (raw and percent-decoded) and the forms a server echoes it back in (the `Basic` value,
+  the decoded `user:password`, the password alone from 4 characters:
+  `echoedCredentialForms`) scrubbed. `test/conformance-p2-library-redaction.test.ts`
   checks the client, nine failing transports and five rejected base URLs.
   Wrong-typed arguments are a `LadesaeulenValidationError` too, never a raw
   `TypeError`: a query that is not an object (`null`/`undefined` mean `{}`), options

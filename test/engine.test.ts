@@ -417,3 +417,20 @@ test("cleartextProblem: exact wording, host with port, loopback range, never the
   }
   assert.notEqual(cleartextProblem("http://128.0.0.1"), undefined);
 });
+
+test("credentials a server echoes are scrubbed from the error: Basic, user:password, password (L13)", async () => {
+  // Node sends the pair UTF-8 encoded (the Authorization header it builds from the URL), so that is the form a server echoes.
+  const basic = Buffer.from("alice:pa ss-pw", "utf8").toString("base64");
+  const echo = `no: Basic ${basic} / alice:pa ss-pw / pa ss-pw`;
+  const answers = [rawResponse(echo, "text/plain", 401), jsonResponse({ error: { code: 401, message: echo } })];
+  for (const answer of answers) {
+    const client = new LadesaeulenClient({ baseUrl: "https://alice:pa%20ss-pw@mirror.example", maxRetries: 0, transport: makeMockTransport(() => answer).transport });
+    const err = await client.count().catch((e: unknown) => e);
+    assert.ok(err instanceof LadesaeulenApiError);
+    for (const form of [basic, "alice:pa ss-pw", "pa ss-pw"]) {
+      assert.ok(!err.message.includes(form), err.message);
+      assert.ok(!err.body.includes(form), err.body);
+    }
+    assert.match(err.message, /no: Basic \*\*\* \/ \*\*\* \/ \*\*\*/);
+  }
+});
