@@ -224,6 +224,8 @@ Parity tests use `parity()` from `test/helpers.ts`: it runs one input through `r
 and through the matching library call on one recording mock transport, so a test
 asserts that both reject with no request sent, or both send the identical request.
 `power.test.ts` checks the per-charge-point power on real register rows.
+`log.test.ts` tests the record helpers of `src/cli/log.ts` on their own
+(`escapeForRecord`, `formatLogRecord`); the CLI-level checks are P23's.
 
 The conformance tests of the 2026-10-05 review's fix patterns are shared across the
 `*-cli` repos; only their adapter block at the top is this repo's:
@@ -277,7 +279,13 @@ Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp,
 (`ERROR`, `WARN`, `INFO`) and a topic, `ladesaeulen.<area>`. `--log-format text` (the default)
 writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
 `--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
-and `msg`. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
+and `msg`. A record is always one line: `formatLogRecord` runs `escapeForRecord` over
+the message (text) or the whole JSON object (jsonl), which writes CR and LF as `\r`/`\n`,
+every other C0 control but TAB, DEL and C1 as `\u00XX`, and U+2028, U+2029 and the bidi
+controls as `\uXXXX`, so no text that reaches a record, by whatever path, can split it,
+forge another one or steer the terminal. The library's error messages keep a server's line
+breaks (`sanitizeServerText` strips only the other controls, and the ArcGIS `error`
+envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: truncated pages and group lists, the always-empty columns) and `http` (the connection, the size-cap hint, the cleartext warning). The `Output error:` line `handleOutputErrors` writes when stdout itself fails and the bin shim's last-resort `Unexpected error:` stay plain. Code logs through `logOf(deps)` and never writes diagnostics
 with `io.err` directly. `run()` builds the logger from argv before commander parses it,
 so commander's own usage errors are records too, and on top of the redacted `io.err`, so
 a secret is kept out of the log in either format. `CliDeps.now` makes the timestamps
