@@ -240,7 +240,9 @@ and through the matching library call on one recording mock transport, so a test
 asserts that both reject with no request sent, or both send the identical request.
 `power.test.ts` checks the per-charge-point power on real register rows.
 `log.test.ts` tests the record helpers of `src/cli/log.ts` on their own
-(`escapeForRecord`, `formatLogRecord`); the CLI-level checks are P23's.
+(`escapeForRecord`, `formatLogRecord`, `installWarningLog`); the CLI-level checks are
+P23's. `io.test.ts` tests `handleOutputErrors` with fake streams (a closed pipe, a stdout
+write error as a record).
 
 The conformance tests of the 2026-10-05 review's fix patterns are shared across the
 `*-cli` repos; only their adapter block at the top is this repo's:
@@ -303,7 +305,7 @@ character, which jq rejects, stopping the whole stream) becomes U+FFFD (`toWellF
 and a message longer than `MAX_RECORD_MESSAGE` (4000 characters, exported) is cut at a
 code point and ends in `… (N more characters)`. The library's error messages keep a server's line
 breaks (`sanitizeServerText` strips only the other controls, and the ArcGIS `error`
-envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: an error status, the ArcGIS `error` envelope on HTTP 200, a malformed answer — a `LadesaeulenParseError`: bad JSON, the wrong shape, an empty body, an unknown charset —, truncated pages and group lists, the always-empty columns), `http` (the connection, the size-cap hint, the cleartext warning) and `output` (a failed write to stdout). A failed write to stdout other than a closed pipe (`handleOutputErrors`, in the bin shim, outside `run()`) is an ERROR record of `ladesaeulen.output` (`Could not write to stdout: …`), and the shim's last-resort `Unexpected error: …` an ERROR of `ladesaeulen.cli`, both in the format argv asks for and redacted like the run's log (`processLogger`). Code logs through `logOf(deps)` and never writes diagnostics
+envelope's `message` and `details` go through it); the record escapes them. The areas are `cli` (usage errors, commander's messages, unexpected errors, the `--near` swap note), `api` (the API's answers and the notes on them: an error status, the ArcGIS `error` envelope on HTTP 200, a malformed answer — a `LadesaeulenParseError`: bad JSON, the wrong shape, an empty body, an unknown charset —, truncated pages and group lists, the always-empty columns), `http` (the connection, the size-cap hint, the cleartext warning) and `output` (a failed write to stdout). A failed write to stdout other than a closed pipe (`handleOutputErrors`, in the bin shim, outside `run()`) is an ERROR record of `ladesaeulen.output` (`Could not write to stdout: …`), and the shim's last-resort `Unexpected error: …` an ERROR of `ladesaeulen.cli`, both in the format argv asks for and redacted like the run's log (`processLogger`), and so are Node's own process warnings (`NODE_TLS_REJECT_UNAUTHORIZED=0`), WARN records of `ladesaeulen.cli`: the shim installs `installWarningLog`, which removes Node's default `warning` listener and logs `(node) <name>: <message>`. Code logs through `logOf(deps)` and never writes diagnostics
 with `io.err` directly. `run()` builds the logger from argv before commander parses it
 (`logFormatFromArgv`, used only for the records of a parse error: it takes the first
 `--log-format`, the one `forbidRepeatedOptions` keeps, and skips the value of the
