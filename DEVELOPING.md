@@ -7,24 +7,70 @@ Ladesäulenregister. Read this before changing the client or CLI.
 
 A typed client + CLI over the Ladesäulenregister's public **ArcGIS FeatureServer**
 (layer 0 = charging stations), part of the `*-cli` family. It follows the shared
-two-layer blueprint (a dependency-free `client/` usable as a library, and a commander
-`cli/` over it) with the family's two test seams.
+two-layer blueprint (a dependency-free client, `packages/client`, usable as a library, and
+a commander CLI, `apps/cli`, over it) with the family's two test seams.
 
 ## Commands
 
 ```bash
 npm install
-npm run build       # tsc -> dist/
-npm run typecheck   # tsc --noEmit
-npm test            # pretest builds, then `node --test --test-timeout=5000 dist/test/*.test.js`
-npm start -- --help
+npm run build       # compiles every workspace (tsc -b) to its dist/
+npm run typecheck   # tsc -b over every workspace, as build
+npm test            # pretest builds, then `node --test` over each workspace's dist/test
+npm run coverage    # the same tests in one run, with a coverage report
+npm start -- --help # run the CLI from the build (node apps/cli/dist/src/cli/index.js)
+npm run bump -- <patch|minor|major>  # bump apps/cli, commit, tag vX.Y.Z
+node --test apps/cli/dist/test/cli.test.js   # one file, after a build
 ```
+
+CI (`ci.yml`) type-checks, builds and tests on Node 22/24, then packs the real tarball,
+checks the pack left nothing behind, installs it globally with the registry out of reach and
+runs the bin. `release.yml` (on a `v*` tag, made by `npm run bump`) verifies the tag against
+`apps/cli/package.json`, writes the SBOMs (scoped to the `apps/cli` workspace) and runs
+`npm pack --workspace apps/cli`; `publish.yml` runs `npm publish --workspace apps/cli`.
 
 ## Layout
 
+The repository is an **npm workspace** with two folders: `apps/` holds the programs it
+publishes, `packages/` the libraries they are built from.
+
 ```
-src/
-  client/        # typed API client, usable independently of the CLI
+package.json         # private workspace manifest: no version, never packed
+apps/cli/            # @maschinenlesbar.org/ladesaeulenregister-cli — the published package
+  package.json       # its version, bin, files, bundleDependencies
+  src/index.ts       # library entry: re-exports @maschinenlesbar.org/ladesaeulenregister-client
+  src/cli/           # the CLI (below)
+  test/              # CLI tests and every conformance-*.test.ts
+packages/client/     # @maschinenlesbar.org/ladesaeulenregister-client — private, bundled into the CLI
+  src/               # the API client (below)
+  test/              # tests that only touch the client, + the transport helpers and fixtures
+tools/pack/          # prepack/postpack: bundle the client and commander into the tarball
+tools/bump.mjs       # version bump + commit + tag (npm run bump)
+tsconfig.docs.json   # TypeDoc only: the package entry, with the client read from its sources
+```
+
+- **The client is its own package** so a later MCP app can share it with the CLI. It is
+  never published on its own: `apps/cli`'s `prepack` copies it (and commander) into the
+  app's `node_modules`, and `bundleDependencies` ships it inside the tarball. The library
+  entry re-exports the client's `"."`, so `import { LadesaeulenClient } from
+  "@maschinenlesbar.org/ladesaeulenregister-cli"` is unchanged.
+- **The client's exports:** `"."` is the public library surface (`src/index.ts`);
+  `"./internal/*"` maps to any module (`…/ladesaeulenregister-client/internal/engine`) for
+  what the CLI needs beyond that; `"./test/*"` reaches the client's test helpers and
+  fixtures from the CLI's tests (not bundled). Only `"."` is part of the library.
+- **Dependencies point one way:** the app depends on the client, the client on nothing
+  in the workspace.
+- **The version lives in `apps/cli/package.json`.** The root has none; a plain
+  `npm version` at the root is refused. Release with `npm run bump -- <patch|minor|major>`,
+  which bumps the app, commits (the bare version as the message) and tags `vX.Y.Z`.
+- **TypeScript:** `tsconfig.base.json` holds the compiler options; every workspace has a
+  `tsconfig.json` (`src/`) and a `tsconfig.test.json` (`test/`), and the root
+  `tsconfig.json`/`tsconfig.test.json` reference them, built with `tsc -b`.
+
+The client (`packages/client/src/`) and the CLI (`apps/cli/src/`):
+
+```
+packages/client/src/
     types.ts     # Feature / ArcGIS query envelope / ChargingStation / query types
     query.ts     # dependency-free query-string builder
     http.ts      # Transport interface + default node:http/https transport
@@ -34,8 +80,8 @@ src/
     power.ts     # per-charge-point power from the connector columns (max_charge_point_kw)
     columns.ts   # EMPTY_FIELDS: the columns the register never fills
     client.ts    # LadesaeulenClient (stations / count / geojson / countBy / fields / layerInfo)
-    index.ts
-  cli/
+    index.ts     # the client's public surface (the library entry re-exports it)
+apps/cli/src/cli/
     io.ts        # injectable I/O (CliDeps / CliIO) — no env seam (no auth); the logger and the clock
     log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     shared.ts    # option parsers (incl. --near lat,lon), global->engine mapping, render
@@ -43,7 +89,6 @@ src/
     program.ts   # assembles the commander program
     run.ts       # parses argv -> exit code (no process.exit; testable)
     index.ts     # #! bin shim
-  index.ts       # library entry
 ```
 
 ## THE thing to know: the documented endpoint is dead
@@ -93,7 +138,8 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   masked) `}`) is called once per retry right before the sleep, never when there is none, and
   a throw in it is swallowed. The CLI's `action()` sets it to log one `WARN` record of
   `ladesaeulen.http`, `HTTP 503 from <host>: retry 1 of 3 in 2 s` (`retryMessage`; host only,
-  whole seconds, ms under 1 s). Tests: `test/engine.test.ts`, `test/retry-log.test.ts`.
+  whole seconds, ms under 1 s). Tests: `packages/client/test/engine.test.ts`,
+  `apps/cli/test/retry-log.test.ts`.
 - **Every transport is held to the same contract** (`engine.ts`), so a custom one (a
   `fetch` adapter, a test double) needs none of it itself: each call runs under the
   overall `timeoutMs` deadline (the request carries an `AbortSignal`,
@@ -105,7 +151,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   any realm). Whatever else a transport throws or returns — a plain `Error`, a string,
   `null`, a response without a valid status — becomes a `LadesaeulenNetworkError`
   (`GET <url> failed: <reason>`, URL redacted, the original as `cause`).
-  `test/conformance-p5-transport-contract.test.ts` checks it.
+  `apps/cli/test/conformance-p5-transport-contract.test.ts` checks it.
 - **The client validates its own arguments** before any request (not only the CLI):
   `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
@@ -155,7 +201,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   stderr, the password alone (4 characters or more) on stderr only, since it may well
   occur in the data. `redactUrl` falls back to
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
-  `test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
+  `apps/cli/test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
   nine argv positions (the schemeless shape as the `--base-url` value only).
   **The library keeps them out too:** the engine holds the base URL in a real `#private`
   field (so `console.log(client)`, `util.inspect` and `JSON.stringify` never show it),
@@ -165,7 +211,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   body, `detail`, a transport's error message and its `cause` chain — has the userinfo
   (raw and percent-decoded) and the forms a server echoes it back in (the `Basic` value,
   the decoded `user:password`, the password alone from 4 characters:
-  `echoedCredentialForms`) scrubbed. `test/conformance-p2-library-redaction.test.ts`
+  `echoedCredentialForms`) scrubbed. `apps/cli/test/conformance-p2-library-redaction.test.ts`
   checks the client, nine failing transports and five rejected base URLs.
   Wrong-typed arguments are a `LadesaeulenValidationError` too, never a raw
   `TypeError`: a query that is not an object (`null`/`undefined` mean `{}`), options
@@ -176,7 +222,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `url` and `body` keep the full value. Every other value an own message quotes from
   a server answer or the caller's input (a charset, a field or key name, a header
   name, a rejected value) is cut at `MAX_MESSAGE_VALUE_LENGTH` too, so `err.message`
-  stays bounded for a library caller. `test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
+  stays bounded for a library caller. `apps/cli/test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
   charset, the 2xx shapes and fifteen wrong-typed calls.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
@@ -185,7 +231,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   A rejected input sends no request; `run.ts` maps the error to exit 2
   (an `ERROR` record of `ladesaeulen.cli`). The CLI makes a single-value option given twice a usage error
   (`forbidRepeatedOptions` in `shared.ts`): commander kept the last `--where` silently.
-  `test/conformance-p10-strict-filters.test.ts` checks unknown keys, wrong-typed values
+  `apps/cli/test/conformance-p10-strict-filters.test.ts` checks unknown keys, wrong-typed values
   and repeated options.
 - **The library owns the request defaults.** `stations()`/`geojson()` send `where=1=1`,
   `outFields=DEFAULT_FIELDS` and `resultRecordCount=DEFAULT_LIMIT` (50) when the query
@@ -217,7 +263,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   connector column. `StationQuery.minChargePointKw` (`--min-point-kw`) filters on it: the
   server gets `CAST(max_electric_power_station AS FLOAT) >= n` (exact, because of the cap),
   the client checks the ratings and adds the connector columns to `outFields`; `count()`
-  pages through the candidates (2,000 per request, `OBJECTID` order). `test/power.test.ts`
+  pages through the candidates (2,000 per request, `OBJECTID` order). `apps/cli/test/power.test.ts`
   uses real register rows.
 - The layer has ~60 columns incl. per-charge-point connector fields and a large
   `F_response_body` JSON blob → the client ships a **curated `DEFAULT_FIELDS`**; the
@@ -238,16 +284,21 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 
 ## Testing
 
-`node --test` on `dist/test/`. Coverage highlights (`client.test.ts`): the full param
+`node --test` on each workspace's `dist/test/`. The client's tests are in
+`packages/client/test/` (`query`, `http`, `engine`), with the transport helpers and the
+fixtures (`helpers.ts`, `fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`,
+`client.test.ts` too (one of its tests runs the CLI), and `apps/cli/test/helpers.ts`
+re-exports the client's helpers next to the CLI's own.
+Coverage highlights (`client.test.ts`): the full param
 mapping (where/outFields/paging), `returnCountOnly`, the ArcGIS `error` envelope
 throwing, `countBy` (outStatistics group-by → `{value,count}`), and the `--near`
 geometry params. `cli.test.ts` covers the three commands, `--near`/`--radius`
 validation, and the hardening guards (control-char UA, empty base URL, bounded retries).
-Parity tests use `parity()` from `test/helpers.ts`: it runs one input through `run()`
+Parity tests use `parity()` from `apps/cli/test/helpers.ts`: it runs one input through `run()`
 and through the matching library call on one recording mock transport, so a test
 asserts that both reject with no request sent, or both send the identical request.
 `power.test.ts` checks the per-charge-point power on real register rows.
-`log.test.ts` tests the record helpers of `src/cli/log.ts` on their own
+`log.test.ts` tests the record helpers of `apps/cli/src/cli/log.ts` on their own
 (`escapeForRecord`, `formatLogRecord`, `installWarningLog`); the CLI-level checks are
 P23's. `io.test.ts` tests `handleOutputErrors` and `stderrAfterStdout` with fake streams (a
 closed pipe, a stdout write error as a record, a record held behind stdout's backlog).
@@ -273,7 +324,7 @@ checks that every stderr line is a log record and `--log-format text|jsonl`.
 - **Exit codes** (`run.ts`): help/version → 0; usage → 2; 404 → 4; network → 6; other → 1.
   The bin shim installs `handleOutputErrors()` (`io.ts`) before `run()`: an EPIPE on
   stdout (`| head`) exits 0 quietly, an EPIPE on stderr is ignored so the run's own code
-  stands (`test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin).
+  stands (`apps/cli/test/conformance-p7-pipes-exit-codes.test.ts` runs the built bin).
 - **Scaffold origin:** scaffolded from `marktstammdatenregister-cli` (GET + query,
   no auth); adapted for the ArcGIS `/query` semantics and the `error` envelope.
 
@@ -287,8 +338,10 @@ and deployed by `docs.yml` together with the TypeDoc API reference under `/api/`
 comes from this repository: the README intro and quick start, the command tree of the built CLI
 (`site/scripts/cli-reference.mjs`), `Usage.md`, `GLOSSARY.md` and its German version
 `GLOSSARY.de.md`, the skills, and the skill examples in `EXAMPLE.md` and `EXAMPLE.de.md`. The
-only repo-specific files are `site/_config.yml` and `site/_data/project.yml` (the German intro
-and the access requirements); the rest of `site/` is identical in every maschinenlesbar.org
+only repo-specific files are `site/_config.yml` (which also says where the published manifest
+and the built program are: `manifest: apps/cli/package.json`, `program:
+apps/cli/dist/src/cli/program.js`) and `site/_data/project.yml` (the German intro and the
+access requirements); the rest of `site/` is identical in every maschinenlesbar.org
 CLI, so change it in all of them together. When the README intro changes, update the German
 intro in `site/_data/project.yml`.
 
@@ -300,7 +353,7 @@ npm run serve                        # http://127.0.0.1:4000/ladesaeulenregister
 
 ## The log on stderr
 
-Every diagnostic line on stderr is a log record (`src/cli/log.ts`): a timestamp, a level
+Every diagnostic line on stderr is a log record (`apps/cli/src/cli/log.ts`): a timestamp, a level
 (`ERROR`, `WARN`, `INFO`) and a topic, `ladesaeulen.<area>`. `--log-format text` (the default)
 writes it log4j style, `<ISO 8601 UTC> <LEVEL padded to 5> [<topic>] <message>`;
 `--log-format jsonl` writes one JSON object per line with exactly `ts`, `level`, `topic`
