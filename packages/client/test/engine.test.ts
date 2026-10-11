@@ -1,0 +1,525 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { RequestEngine, MAX_GET_URL_LENGTH, cleartextProblem, parseRetryAfter } from "../src/engine.js";
+import {
+  LadesaeulenApiError,
+  LadesaeulenNetworkError,
+  LadesaeulenParseError,
+  LadesaeulenValidationError,
+  cutText,
+  toWellFormed,
+} from "../src/errors.js";
+import { LadesaeulenClient } from "../src/client.js";
+import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
+import * as fx from "./fixtures.js";
+
+test("buildUrl appends the path and query string", () => {
+  const e = new RequestEngine({ baseUrl: "https://example.test/FeatureServer/" });
+  assert.equal(e.buildUrl("/0/query", { where: "1=1" }), "https://example.test/FeatureServer/0/query?where=1%3D1");
+  assert.equal(e.buildUrl("0"), "https://example.test/FeatureServer/0");
+});
+
+test("getJson performs a GET with query params and the User-Agent/Accept headers", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.stations));
+  const e = new RequestEngine({ transport: mt.transport, userAgent: "ua/1" });
+  await e.getJson("/0/query", { where: "1=1", f: "json" });
+  const req = mt.last();
+  assert.equal(req.method, "GET");
+  assert.equal(req.headers?.["Accept"], "application/json");
+  assert.equal(req.headers?.["User-Agent"], "ua/1");
+  assert.equal(queryOf(req).get("where"), "1=1");
+});
+
+test("getJson parses and returns the JSON body", async () => {
+  const mt = makeMockTransport(() => jsonResponse(fx.stations));
+  const e = new RequestEngine({ transport: mt.transport });
+  assert.deepEqual(await e.getJson("/0/query"), fx.stations);
+});
+
+test("getJson returns null on an empty/204 body", async () => {
+  const mt = makeMockTransport(() => rawResponse("", "application/json", 204));
+  const e = new RequestEngine({ transport: mt.transport });
+  assert.equal(await e.getJson("/x"), null);
+});
+
+test("getJson throws LadesaeulenParseError on invalid JSON", async () => {
+  const mt = makeMockTransport(() => rawResponse("not json", "application/json"));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(() => e.getJson("/x"), LadesaeulenParseError);
+});
+
+test("a non-2xx surfaces as a LadesaeulenApiError with the parsed error.message", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ error: { message: "kaputt" } }, 400));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.getJson("/x"),
+    (err) => err instanceof LadesaeulenApiError && err.status === 400 && /kaputt/.test(err.message),
+  );
+});
+
+test("a non-JSON (plain-text) error body is surfaced as the detail", async () => {
+  const mt = makeMockTransport(() => rawResponse("Service temporarily down", "text/plain", 500));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.getJson("/x"),
+    (err) => err instanceof LadesaeulenApiError && err.status === 500 && /Service temporarily down/.test(err.message),
+  );
+});
+
+// Control characters are built via char codes so no raw control byte ever appears
+// in this source file.
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const C1 = String.fromCharCode(0x9b); // a C1 control (CSI)
+
+/** True if the string contains any C0/C1 control char except tab/newline. */
+function hasControlChars(s: string): boolean {
+  return [...s].some((c) => {
+    const n = c.charCodeAt(0);
+    return (n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f));
+  });
+}
+
+test("a JSON error detail is stripped of terminal control characters", async () => {
+  const evil = `boom${ESC}[31mred${BEL}${C1}2J`;
+  const mt = makeMockTransport(() => jsonResponse({ error: { message: evil } }, 500));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.getJson("/x"),
+    (err) => {
+      assert.ok(err instanceof LadesaeulenApiError);
+      assert.ok(!hasControlChars(err.detail ?? ""));
+      assert.ok(!hasControlChars(err.message));
+      assert.equal(err.detail, "boom[31mred2J");
+      return true;
+    },
+  );
+});
+
+test("a non-JSON error snippet is stripped of terminal control characters", async () => {
+  const evil = `down${ESC}]0;pwned${BEL}`;
+  const mt = makeMockTransport(() => rawResponse(evil, "text/plain", 502));
+  const e = new RequestEngine({ transport: mt.transport });
+  await assert.rejects(
+    () => e.getJson("/x"),
+    (err) => {
+      assert.ok(err instanceof LadesaeulenApiError);
+      assert.ok(!hasControlChars(err.detail ?? ""));
+      assert.ok(!hasControlChars(err.message));
+      return true;
+    },
+  );
+});
+
+test("a 503 is retried up to maxRetries then surfaces as a LadesaeulenApiError", async () => {
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    return jsonResponse({ error: { message: "busy" } }, 503);
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+  await assert.rejects(() => e.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 503);
+  assert.equal(calls, 3);
+});
+
+const resetError = (): Error => Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+
+test("a GET whose connection was reset is retried like a 503, with the linear backoff", async () => {
+  let calls = 0;
+  const sleeps: number[] = [];
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    if (calls < 3) throw resetError();
+    return jsonResponse({ count: 7 });
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async (ms) => void sleeps.push(ms) });
+  assert.deepEqual(await e.getJson("/0/query", { f: "json" }), { count: 7 });
+  assert.equal(calls, 3);
+  assert.deepEqual(sleeps, [200, 400]);
+});
+
+test("a reset that persists surfaces as a LadesaeulenNetworkError that names the retries", async () => {
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    throw resetError();
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+  await assert.rejects(
+    () => e.getJson("/x"),
+    (err: unknown) =>
+      err instanceof LadesaeulenNetworkError &&
+      /^GET .* failed: socket hang up \(after 2 retries\)$/.test(err.message) &&
+      (err.cause as { code?: string } | undefined)?.code === "ECONNRESET",
+  );
+  assert.equal(calls, 3);
+});
+
+test("maxRetries 0 turns the reset retries off", async () => {
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    throw resetError();
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 0, sleep: async () => {} });
+  await assert.rejects(() => e.getJson("/x"), (err: unknown) => err instanceof LadesaeulenNetworkError && !/after/.test(err.message));
+  assert.equal(calls, 1);
+});
+
+test("a refused connection, a DNS failure and a timeout are not retried", async () => {
+  const failures: Array<() => unknown> = [
+    () => Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:1"), { code: "ECONNREFUSED" }),
+    () => Object.assign(new Error("getaddrinfo ENOTFOUND example.invalid"), { code: "ENOTFOUND" }),
+    () => new LadesaeulenNetworkError("Request timed out after 30000ms"),
+  ];
+  for (const failure of failures) {
+    let calls = 0;
+    const mt = makeMockTransport(() => {
+      calls += 1;
+      throw failure();
+    });
+    const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+    await assert.rejects(() => e.getJson("/x"), LadesaeulenNetworkError);
+    assert.equal(calls, 1, String(failure()));
+  }
+});
+
+test("a long-query form POST is not re-sent after a reset (a 503 still is)", async () => {
+  const where = `Ort IN ('Berlin'${Array.from({ length: 200 }, (_, i) => `,'X${String(i).padStart(4, "0")}'`).join("")})`;
+  let calls = 0;
+  const mt = makeMockTransport(() => {
+    calls += 1;
+    throw resetError();
+  });
+  const e = new RequestEngine({ transport: mt.transport, maxRetries: 2, sleep: async () => {} });
+  await assert.rejects(() => e.getJson("/0/query", { where, f: "json" }), LadesaeulenNetworkError);
+  assert.equal(mt.last().method, "POST");
+  assert.equal(calls, 1);
+});
+
+test("the engine rejects a non-http(s) base URL before any request, even with a custom transport", () => {
+  for (const baseUrl of ["file:///etc/passwd", "ftp://example.org"]) {
+    const mt = makeMockTransport(() => jsonResponse(fx.stations));
+    assert.throws(
+      () => new RequestEngine({ baseUrl, transport: mt.transport }),
+      (err) =>
+        err instanceof LadesaeulenValidationError &&
+        err.message === "Invalid baseUrl: Only http: and https: base URLs are supported.",
+    );
+    assert.equal(mt.calls.length, 0);
+  }
+});
+
+test("the engine rejects an unparseable base URL", () => {
+  assert.throws(
+    () => new RequestEngine({ baseUrl: "not a url" }),
+    (err) =>
+      err instanceof LadesaeulenValidationError &&
+      err.message === "Invalid baseUrl: Expected a valid URL (e.g. https://host/path).",
+  );
+});
+
+test("a query whose GET URL would exceed MAX_GET_URL_LENGTH goes out as a form POST", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ count: 4956 }));
+  const e = new RequestEngine({ transport: mt.transport, baseUrl: "https://example.test/FS" });
+  const where = `Ort IN ('Berlin'${Array.from({ length: 200 }, (_, i) => `,'X${String(i).padStart(4, "0")}'`).join("")})`;
+  assert.ok(e.buildUrl("/0/query", { where, f: "json" }).length > MAX_GET_URL_LENGTH);
+  assert.deepEqual(await e.getJson("/0/query", { where, f: "json", returnCountOnly: true }), { count: 4956 });
+  const req = mt.last();
+  assert.equal(req.method, "POST");
+  assert.equal(req.url, "https://example.test/FS/0/query");
+  assert.equal(req.headers?.["Content-Type"], "application/x-www-form-urlencoded");
+  const body = String(req.body);
+  assert.equal(req.headers?.["Content-Length"], String(Buffer.byteLength(body)));
+  const form = new URLSearchParams(body);
+  assert.equal(form.get("where"), where);
+  assert.equal(form.get("f"), "json");
+  assert.equal(form.get("returnCountOnly"), "true");
+});
+
+test("a short query stays a GET without a body", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ count: 1 }));
+  const e = new RequestEngine({ transport: mt.transport });
+  await e.getJson("/0/query", { where: "Ort='Berlin'", f: "json" });
+  assert.equal(mt.last().method, "GET");
+  assert.equal(mt.last().body, undefined);
+  assert.equal(mt.last().headers?.["Content-Type"], undefined);
+});
+
+test("an HTTP error on a POSTed query names POST and the bare URL", async () => {
+  const mt = makeMockTransport(() => jsonResponse({ error: { message: "nope" } }, 400));
+  const e = new RequestEngine({ transport: mt.transport, baseUrl: "https://example.test/FS" });
+  await assert.rejects(
+    () => e.getJson("/0/query", { where: "x".repeat(3000) }),
+    (err) => err instanceof LadesaeulenApiError && err.message === "HTTP 400 for POST https://example.test/FS/0/query: nope",
+  );
+});
+
+function retryingEngine(retryAfter: string | undefined) {
+  const delays: number[] = [];
+  const mt = makeMockTransport(() => {
+    const res = jsonResponse({ error: { message: "slow down" } }, 429);
+    if (retryAfter !== undefined) res.headers["retry-after"] = retryAfter;
+    return res;
+  });
+  const engine = new RequestEngine({
+    transport: mt.transport,
+    maxRetries: 2,
+    sleep: async (ms) => {
+      delays.push(ms);
+    },
+  });
+  return { engine, mt, delays };
+}
+
+test("a 429 waits the Retry-After seconds before each retry", async () => {
+  const { engine, mt, delays } = retryingEngine("1");
+  await assert.rejects(() => engine.getJson("/x"), (err) => err instanceof LadesaeulenApiError && err.status === 429);
+  assert.deepEqual(delays, [1000, 1000]);
+  assert.equal(mt.calls.length, 3);
+});
+
+test("a malformed Retry-After falls back to the linear backoff", async () => {
+  for (const bad of ["-1", "1.5", "+5", "1e3", "0x10", "soon", "2026-10-21T07:28:00Z", ""]) {
+    const { engine, delays } = retryingEngine(bad);
+    await assert.rejects(() => engine.getJson("/x"), LadesaeulenApiError);
+    assert.deepEqual(delays, [200, 400], bad);
+  }
+});
+
+test("a Retry-After beyond MAX_RETRY_AFTER_MS is not retried, and the error says so", async () => {
+  for (const long of ["31", "99999999999", "Wed, 21 Oct 2099 07:28:00 GMT"]) {
+    const { engine, mt, delays } = retryingEngine(long);
+    await assert.rejects(
+      () => engine.getJson("/x"),
+      (err) =>
+        err instanceof LadesaeulenApiError &&
+        err.status === 429 &&
+        err.retries === 0 &&
+        typeof err.retryAfterMs === "number" &&
+        /the server asked to retry after \d+ s, longer than the 30 s the client waits; not retried/.test(err.message),
+    );
+    assert.equal(mt.calls.length, 1, long);
+    assert.deepEqual(delays, [], long);
+  }
+});
+
+test("a status that persists through the retries says how many ran", async () => {
+  const { engine } = retryingEngine(undefined);
+  await assert.rejects(
+    () => engine.getJson("/x"),
+    (err) => err instanceof LadesaeulenApiError && err.retries === 2 && / \(after 2 retries\)$/.test(err.message),
+  );
+});
+
+test("retryDelayMs is bounded like a Retry-After wait (0..30000)", () => {
+  assert.doesNotThrow(() => new RequestEngine({ retryDelayMs: 30_000 }));
+  assert.throws(() => new RequestEngine({ retryDelayMs: 30_001 }), LadesaeulenValidationError);
+});
+
+test("parseRetryAfter reads delay-seconds and IMF-fixdate HTTP-dates only", () => {
+  const now = Date.parse("Wed, 21 Oct 2026 07:28:00 GMT");
+  assert.equal(parseRetryAfter("5", now), 5000);
+  assert.equal(parseRetryAfter([" 7 ", "9"], now), 7000);
+  assert.equal(parseRetryAfter("Wed, 21 Oct 2026 07:28:10 GMT", now), 10_000);
+  assert.equal(parseRetryAfter("Wed, 21 Oct 2026 07:27:00 GMT", now), 0);
+  assert.equal(parseRetryAfter("Wednesday, 21-Oct-26 07:28:10 GMT", now), undefined);
+  assert.equal(parseRetryAfter(undefined, now), undefined);
+});
+
+test("the engine rejects a base URL with a query or fragment", () => {
+  for (const baseUrl of ["https://example.test/fs?x=1", "https://example.test/fs#f"]) {
+    assert.throws(
+      () => new RequestEngine({ baseUrl }),
+      (err) =>
+        err instanceof LadesaeulenValidationError &&
+        err.message === "Invalid baseUrl: A base URL cannot have a query (?) or fragment (#).",
+    );
+  }
+});
+
+test("a non-2xx ArcGIS error with an empty message reports its details", async () => {
+  const mt = makeMockTransport(() =>
+    jsonResponse(
+      { error: { code: 400, message: "", details: ["No where clause specified.", "No where clause specified."] } },
+      400,
+    ),
+  );
+  const e = new RequestEngine({ transport: mt.transport, baseUrl: "https://example.test/fs" });
+  await assert.rejects(
+    () => e.getJson("/0", { f: "json" }),
+    (err) =>
+      err instanceof LadesaeulenApiError &&
+      err.message === "HTTP 400 for GET https://example.test/fs/0?f=json: No where clause specified.",
+  );
+});
+
+test("a body is decoded by the charset its Content-Type declares; a BOM is dropped", async () => {
+  const body = { features: [{ attributes: { Ort: "München" } }] };
+  for (const [contentType, bytes] of [
+    ["application/json; charset=iso-8859-1", Buffer.from(JSON.stringify(body), "latin1")],
+    ["application/json; charset=UTF-8", Buffer.from(JSON.stringify(body), "utf8")],
+    ["application/json", Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(JSON.stringify(body))])],
+  ] as const) {
+    const mt = makeMockTransport(() => rawResponse(bytes, contentType));
+    const engine = new RequestEngine({ transport: mt.transport });
+    assert.deepEqual(await engine.getJson("/0/query"), body, contentType);
+  }
+  const mt = makeMockTransport(() => rawResponse("{}", "application/json; charset=x-nonsense"));
+  await assert.rejects(new RequestEngine({ transport: mt.transport }).getJson("/0/query"), LadesaeulenParseError);
+});
+
+test("server text and long URLs are cut at 500 characters in messages, kept whole in body/url", async () => {
+  const long = "x".repeat(5000);
+  const mt = makeMockTransport(() => jsonResponse({ error: { code: 400, message: long } }, 400));
+  const engine = new RequestEngine({ transport: mt.transport });
+  const err = await engine.getJson("/0/query", { where: `ID='${"9".repeat(1500)}'` }).catch((e: unknown) => e);
+  assert.ok(err instanceof LadesaeulenApiError);
+  assert.ok(err.message.length < 1200, String(err.message.length));
+  assert.ok(err.body.includes(long));
+  assert.ok(err.url.length > 1500);
+});
+
+test("cutText never cuts inside a surrogate pair; toWellFormed replaces half a character", () => {
+  assert.equal(cutText("ab\u{1f600}cd", 3), "ab");
+  assert.equal(cutText("ab\u{1f600}cd", 4), "ab\u{1f600}");
+  assert.equal(cutText("short", 10), "short");
+  assert.equal(toWellFormed("a\ud83d b\ude00 \u{1f600}"), "a\ufffd b\ufffd \u{1f600}");
+});
+
+test("server text cut at 500 (ArcGIS envelope) or 200 characters (a plain body) keeps the message well-formed", async () => {
+  const answers = [
+    jsonResponse({ error: { code: 400, message: "a" + "\u{1f600}".repeat(400) } }),
+    rawResponse("a" + "\u{1f600}".repeat(400), "text/plain", 500),
+  ];
+  for (const answer of answers) {
+    const client = new LadesaeulenClient({ transport: makeMockTransport(() => answer).transport });
+    const err = await client.count().catch((e: unknown) => e);
+    assert.ok(err instanceof LadesaeulenApiError);
+    assert.equal(toWellFormed(err.message), err.message);
+    assert.match(err.message, /…$/);
+  }
+});
+
+test("cleartextProblem: exact wording, host with port, loopback range, never the secret", () => {
+  assert.equal(cleartextProblem("http://mirror.example:8080/api"), "requests to mirror.example:8080 are sent unencrypted (http:, not https:)");
+  assert.equal(
+    cleartextProblem("http://alice:pw@mirror.example"),
+    "the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)",
+  );
+  assert.equal(
+    cleartextProblem("http://alice:pw@mirror.example", ["the API key"]),
+    "the API key and the base URL's credentials are sent unencrypted to mirror.example (http:, not https:)",
+  );
+  assert.equal(cleartextProblem("http://mirror.example", ["the login"]), "the login is sent unencrypted to mirror.example (http:, not https:)");
+  for (const url of ["https://alice:pw@mirror.example", "http://127.8.9.10", "http://localhost:1", "http://[::1]/", "not a url"]) {
+    assert.equal(cleartextProblem(url), undefined, url);
+  }
+  assert.notEqual(cleartextProblem("http://128.0.0.1"), undefined);
+});
+
+test("credentials a server echoes are scrubbed from the error: Basic, user:password, password (L13)", async () => {
+  // Node sends the pair UTF-8 encoded (the Authorization header it builds from the URL), so that is the form a server echoes.
+  const basic = Buffer.from("alice:pa ss-pw", "utf8").toString("base64");
+  const echo = `no: Basic ${basic} / alice:pa ss-pw / pa ss-pw`;
+  const answers = [rawResponse(echo, "text/plain", 401), jsonResponse({ error: { code: 401, message: echo } })];
+  for (const answer of answers) {
+    const client = new LadesaeulenClient({ baseUrl: "https://alice:pa%20ss-pw@mirror.example", maxRetries: 0, transport: makeMockTransport(() => answer).transport });
+    const err = await client.count().catch((e: unknown) => e);
+    assert.ok(err instanceof LadesaeulenApiError);
+    for (const form of [basic, "alice:pa ss-pw", "pa ss-pw"]) {
+      assert.ok(!err.message.includes(form), err.message);
+      assert.ok(!err.body.includes(form), err.body);
+    }
+    assert.match(err.message, /no: Basic \*\*\* \/ \*\*\* \/ \*\*\*/);
+  }
+});
+
+test("onRetry is called once per retry, with the event fields, right before the sleep", async () => {
+  const log: string[] = [];
+  const events: unknown[] = [];
+  let n = 0;
+  const mt = makeMockTransport(() =>
+    n++ < 2
+      ? { status: 503, headers: n === 1 ? { "retry-after": "2" } : {}, body: Buffer.from("{}") }
+      : jsonResponse({ ok: 1 }),
+  );
+  const e = new RequestEngine({
+    transport: mt.transport,
+    baseUrl: "https://user:pw@example.test",
+    maxRetries: 3,
+    sleep: async (ms) => void log.push(`sleep ${ms}`),
+    onRetry: (ev) => {
+      events.push(ev);
+      log.push("retry");
+    },
+  });
+  await e.request("/x");
+  assert.deepEqual(log, ["retry", "sleep 2000", "retry", "sleep 400"]);
+  assert.deepEqual(events, [
+    { retry: 1, maxRetries: 3, delayMs: 2000, status: 503, url: "https://***@example.test/x" },
+    { retry: 2, maxRetries: 3, delayMs: 400, status: 503, url: "https://***@example.test/x" },
+  ]);
+});
+
+test("onRetry reports a reset connection without a status", async () => {
+  let n = 0;
+  const events: unknown[] = [];
+  const mt = makeMockTransport(() => {
+    if (n++ === 0) throw Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+    return jsonResponse({ ok: 1 });
+  });
+  const e = new RequestEngine({ transport: mt.transport, sleep: async () => {}, onRetry: (ev) => void events.push(ev) });
+  await e.request("/x");
+  assert.equal(events.length, 1);
+  assert.equal((events[0] as { status?: number }).status, undefined);
+  assert.equal((events[0] as { retry: number }).retry, 1);
+});
+
+test("a throw in onRetry is swallowed", async () => {
+  let n = 0;
+  const mt = makeMockTransport(() => (n++ === 0 ? { status: 503, headers: {}, body: Buffer.from("{}") } : jsonResponse({ ok: 1 })));
+  const e = new RequestEngine({
+    transport: mt.transport,
+    sleep: async () => {},
+    onRetry: () => {
+      throw new Error("boom");
+    },
+  });
+  await e.request("/x");
+  assert.equal(mt.calls.length, 2);
+});
+
+test("onRetry is never called without a retry", async () => {
+  const events: unknown[] = [];
+  const onRetry = (ev: unknown) => void events.push(ev);
+  const ok = new RequestEngine({ transport: makeMockTransport(() => jsonResponse({})).transport, sleep: async () => {}, onRetry });
+  await ok.request("/x");
+  const notFound = new RequestEngine({
+    transport: makeMockTransport(() => jsonResponse({ detail: "no" }, 404)).transport,
+    sleep: async () => {},
+    onRetry,
+  });
+  await assert.rejects(notFound.request("/x"), LadesaeulenApiError);
+  // retries exhausted: the last 503 is an error, not a retry
+  const down = new RequestEngine({
+    transport: makeMockTransport(() => ({ status: 503, headers: {}, body: Buffer.from("{}") })).transport,
+    maxRetries: 1,
+    sleep: async () => {},
+    onRetry,
+  });
+  await assert.rejects(down.request("/x"), LadesaeulenApiError);
+  assert.equal(events.length, 1);
+  // a Retry-After over the cap is not retried
+  const long = new RequestEngine({
+    transport: makeMockTransport(() => ({ status: 503, headers: { "retry-after": "999999" }, body: Buffer.from("{}") })).transport,
+    sleep: async () => {},
+    onRetry,
+  });
+  await assert.rejects(long.request("/x"), LadesaeulenApiError);
+  assert.equal(events.length, 1);
+});
+
+test("onRetry must be a function", () => {
+  assert.throws(() => new RequestEngine({ onRetry: 5 as never }), LadesaeulenValidationError);
+});

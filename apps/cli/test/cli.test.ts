@@ -1,0 +1,458 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { run } from "../src/cli/run.js";
+import { LadesaeulenClient } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/client";
+import { credentialsIn } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/errors";
+import type { CliDeps } from "../src/cli/io.js";
+import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/http";
+import { makeMockTransport, jsonResponse, queryOf, untimed } from "./helpers.js";
+import * as fx from "@maschinenlesbar.org/ladesaeulenregister-client/test/fixtures";
+
+function makeCli(responder: (req: HttpRequest) => HttpResponse) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const mt = makeMockTransport(responder);
+  const deps: CliDeps = {
+    io: { out: (s) => out.push(s), err: (s) => err.push(s) },
+    createClient: (opts) => new LadesaeulenClient({ ...opts, transport: mt.transport }),
+  };
+  return { deps, out, err, mt };
+}
+
+test("stations renders { features, exceededTransferLimit } and hits /0/query", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations"], cli.deps);
+  assert.equal(code, 0);
+  assert.equal(new URL(cli.mt.last().url).pathname.endsWith("/0/query"), true);
+  const parsed = JSON.parse(cli.out.join("\n")) as { features: unknown[]; exceededTransferLimit: boolean };
+  assert.equal(parsed.features.length, 2);
+  assert.equal(parsed.exceededTransferLimit, false);
+});
+
+test("prints a stderr note when the page is capped (exceededTransferLimit)", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ features: [{ attributes: { ID: "1" } }], exceededTransferLimit: true }),
+  );
+  const code = await run(["stations", "--limit", "2000"], cli.deps);
+  assert.equal(code, 0);
+  assert.match(cli.err.join("\n"), /more stations match/);
+});
+
+test("no cap note when exceededTransferLimit is false", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations"], cli.deps);
+  assert.doesNotMatch(cli.err.join("\n"), /more stations match/);
+});
+
+test("--count prints only the number", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  await run(["stations", "--where", "Typ='Schnellladeeinrichtung'", "--count"], cli.deps);
+  assert.equal(JSON.parse(cli.out.join("\n")), 660);
+  assert.equal(queryOf(cli.mt.last()).get("returnCountOnly"), "true");
+});
+
+test("--geojson outputs a FeatureCollection", async () => {
+  const cli = makeCli(() => jsonResponse(fx.geojson));
+  await run(["stations", "--geojson"], cli.deps);
+  assert.equal(JSON.parse(cli.out.join("\n")).type, "FeatureCollection");
+  assert.equal(queryOf(cli.mt.last()).get("f"), "geojson");
+});
+
+test("DEL and C1 control characters in server data are escaped in the JSON output", async () => {
+  const controls = String.fromCharCode(0x7f, 0x85, 0x9b) + "2J";
+  const esc = String.fromCharCode(0x1b) + "[31m";
+  const served = {
+    features: [{ attributes: { ...fx.stations.features[0]!.attributes, Ort: `Düsseldorf${controls}`, Betreiber: esc } }],
+    exceededTransferLimit: false,
+  };
+  for (const format of [[], ["--compact"]]) {
+    const cli = makeCli(() => jsonResponse(served));
+    assert.equal(await run([...format, "stations"], cli.deps), 0);
+    const text = cli.out.join("\n");
+    const raw = [...text].filter((c) => c.charCodeAt(0) < 0x20 ? c !== "\n" : c.charCodeAt(0) >= 0x7f && c.charCodeAt(0) <= 0x9f);
+    assert.deepEqual(raw, [], format.join(" "));
+    assert.match(text, /Düsseldorf\\u007f\\u0085\\u009b2J/);
+    assert.deepEqual(JSON.parse(text), served);
+  }
+});
+
+test("--count and --geojson together is a usage error (exit 2), no request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations", "--count", "--geojson"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /--count and --geojson cannot be combined/);
+});
+
+test("--limit / --order-by / --fields are forwarded", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations", "--limit", "5", "--order-by", "Ort ASC", "--fields", "Ort,Typ"], cli.deps);
+  const q = queryOf(cli.mt.last());
+  assert.equal(q.get("resultRecordCount"), "5");
+  assert.equal(q.get("orderByFields"), "Ort ASC");
+  assert.equal(q.get("outFields"), "Ort,Typ");
+});
+
+test("--near with --radius issues a spatial query", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations", "--near", "52.52,13.405", "--radius", "1.5"], cli.deps);
+  const q = queryOf(cli.mt.last());
+  assert.equal(q.get("geometry"), "13.405,52.52");
+  assert.equal(q.get("distance"), "1500");
+});
+
+test("--near far outside Germany warns about a likely lat/lon swap", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  await run(["stations", "--near", "13.405,52.52", "--radius", "1", "--count"], cli.deps); // swapped
+  assert.match(cli.err.join("\n"), /outside Germany.*swap/s);
+});
+
+test("--near inside Germany prints no swap note", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations", "--near", "52.52,13.405", "--radius", "1"], cli.deps);
+  assert.doesNotMatch(cli.err.join("\n"), /outside Germany/);
+});
+
+test("--near without --radius is a usage error and issues no request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations", "--near", "52.52,13.405"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /--near and --radius must be given together/);
+});
+
+test("a malformed --near is rejected at parse time (exit 2)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations", "--near", "not-a-point", "--radius", "1"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("--limit above the max is rejected (exit 2)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["stations", "--limit", "20000"], cli.deps), 2);
+});
+
+test("an ArcGIS error envelope surfaces as an error (exit 1)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.arcgisError));
+  const code = await run(["stations", "--where", "BOGUS=1"], cli.deps);
+  assert.equal(code, 1);
+  assert.match(cli.err.join("\n"), /Unable to complete operation/);
+});
+
+test("count-by <field> aggregates and renders rows", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countByState));
+  const code = await run(["count-by", "state"], cli.deps);
+  assert.equal(code, 0);
+  assert.equal(queryOf(cli.mt.last()).get("groupByFieldsForStatistics"), "state");
+  assert.deepEqual(JSON.parse(cli.out.join("\n"))[0], { value: "Bayern", count: 21969 });
+});
+
+test("count-by with no field is a usage error (exit 2)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countByState));
+  assert.equal(await run(["count-by"], cli.deps), 2);
+});
+
+test("fields lists the queryable columns", async () => {
+  const cli = makeCli(() => jsonResponse(fx.fields));
+  const code = await run(["fields"], cli.deps);
+  assert.equal(code, 0);
+  assert.equal(new URL(cli.mt.last().url).pathname.endsWith("/0"), true);
+  assert.equal(JSON.parse(cli.out.join("\n"))[0].name, "Betreiber");
+});
+
+test("a control character in --user-agent is rejected (exit 2)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations", "--user-agent", "bad\r\nX-Injected: 1"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("an empty --base-url is rejected (exit 2)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["--base-url", "", "stations"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("a non-http(s) --base-url scheme is rejected at parse time (exit 2, no request)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["--base-url", "file:///etc/passwd", "stations"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("--max-retries above the sane maximum is rejected (exit 2)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["--max-retries", "1000000", "stations"], cli.deps);
+  assert.equal(code, 2);
+  assert.equal(cli.mt.calls.length, 0);
+});
+
+test("--timeout accepts up to the largest timer Node supports", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["--timeout", "2147483647", "stations"], cli.deps), 0);
+  assert.equal(cli.mt.last().timeoutMs, 2_147_483_647);
+
+  const over = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["--timeout", "2147483648", "stations"], over.deps), 2);
+  assert.equal(over.mt.calls.length, 0);
+  assert.match(over.err.join("\n"), /Must be <= 2147483647/);
+});
+
+test("a bare invocation prints help and exits 0", async () => {
+  const cli = makeCli(() => jsonResponse({}));
+  const code = await run([], cli.deps);
+  assert.equal(code, 0);
+  assert.match(cli.out.join("\n"), /Usage: ladesaeulen/);
+});
+
+test("an unknown command exits 2", async () => {
+  const cli = makeCli(() => jsonResponse({}));
+  assert.equal(await run(["boguscmd"], cli.deps), 2);
+});
+
+test("--compact prints single-line JSON", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  await run(["stations", "--compact"], cli.deps);
+  assert.equal(cli.out.length, 1);
+});
+
+test("count-by with a field list is a usage error (exit 2), no request", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countByState));
+  assert.equal(await run(["count-by", "state,Typ"], cli.deps), 2);
+  assert.equal(cli.mt.calls.length, 0);
+  assert.match(cli.err.join("\n"), /expected one field name, got a list/);
+});
+
+test("--count with a non-numeric count exits 1 instead of printing it", async () => {
+  const cli = makeCli(() => jsonResponse({ count: "12abc" }));
+  assert.equal(await run(["stations", "--count"], cli.deps), 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(cli.err.join("\n"), /expected a non-negative integer count/);
+});
+
+test("a string ArcGIS error in a 200 reply exits 1 with its text", async () => {
+  const cli = makeCli(() => jsonResponse({ error: "Token Required" }));
+  assert.equal(await run(["stations"], cli.deps), 1);
+  assert.deepEqual(cli.out, []);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.api\] ArcGIS error for GET \S+: Token Required$/);
+});
+
+test("fields and count-by with null entries exit 1 with a parse error, not 'Unexpected error'", async () => {
+  for (const [argv, body] of [
+    [["fields"], { fields: [null, 1, { name: 5 }] }],
+    [["count-by", "state"], { features: [{ attributes: { state: "A", count: 3 } }, { attributes: null }] }],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(body));
+    assert.equal(await run([...argv], cli.deps), 1);
+    assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.api\] Unexpected response shape from /);
+  }
+});
+
+test("the truncation note blames --limit when the page is as long as the limit", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ features: [{ attributes: { ID: "1" } }, { attributes: { ID: "2" } }], exceededTransferLimit: true }),
+  );
+  assert.equal(await run(["stations", "--limit", "2"], cli.deps), 0);
+  assert.equal(
+    untimed(cli.err.join("\n")),
+    "INFO  [ladesaeulen.api] more stations match than the 2 returned (--limit 2). Page with --offset, or raise --limit.",
+  );
+});
+
+test("--geojson prints the truncation note when the collection was cut", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ type: "FeatureCollection", properties: { exceededTransferLimit: true }, features: [{}, {}] }),
+  );
+  assert.equal(await run(["stations", "--geojson", "--limit", "3000"], cli.deps), 0);
+  assert.match(cli.err.join("\n"), /the server caps a page at ~2000 rows/);
+  const quiet = makeCli(() => jsonResponse(fx.geojson));
+  assert.equal(await run(["stations", "--geojson"], quiet.deps), 0);
+  assert.deepEqual(quiet.err, []);
+});
+
+test("count-by prints a note when the server cut the group list", async () => {
+  const cli = makeCli(() => jsonResponse({ ...fx.countByState, exceededTransferLimit: true }));
+  assert.equal(await run(["count-by", "state"], cli.deps), 0);
+  assert.equal(
+    untimed(cli.err.join("\n")),
+    "INFO  [ladesaeulen.api] more groups exist than the 3 returned (the server caps a result at ~2000 groups). " +
+      "The largest groups are all there; narrow --where to see the rest.",
+  );
+  assert.equal((JSON.parse(cli.out.join("\n")) as unknown[]).length, 3);
+});
+
+test("--base-url with a query, fragment or surrounding whitespace is a usage error, no request", async () => {
+  for (const [url, msg] of [
+    ["http://127.0.0.1:1/fs?x=1", /cannot have a query \(\?\) or fragment \(#\)/],
+    ["http://127.0.0.1:1/fs#frag", /cannot have a query \(\?\) or fragment \(#\)/],
+    [" http://127.0.0.1:1/fs ", /cannot have surrounding whitespace/],
+    ["http://127.0.0.1:1/fs ", /cannot have surrounding whitespace/],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["--base-url", url, "stations", "--count"], cli.deps), 2, url);
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), msg);
+  }
+  // A path prefix still works.
+  const ok = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["--base-url", "http://127.0.0.1:1/mirror/fs/", "stations", "--count"], ok.deps), 0);
+  assert.equal(new URL(ok.mt.last().url).pathname, "/mirror/fs/0/query");
+});
+
+test("--radius must be a plain decimal from 0.001 to 1000 km (usage error, no request)", async () => {
+  for (const bad of ["0.0004", "1e308", "100000", "0x10", "1e1", " 2", "+2", "-1", "0", "NaN", ".5"]) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["stations", "--near", "52.52,13.405", "--radius", bad, "--count"], cli.deps), 2, bad);
+    assert.equal(cli.mt.calls.length, 0, bad);
+  }
+  for (const [good, metres] of [["0.001", "1"], ["1000", "1000000"], ["2.5", "2500"]] as const) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["stations", "--near", "52.52,13.405", "--radius", good, "--count"], cli.deps), 0, good);
+    assert.equal(queryOf(cli.mt.last()).get("distance"), metres);
+  }
+});
+
+test("--user-agent: blank, control characters and non-Latin-1 are usage errors; tab and Latin-1 pass", async () => {
+  for (const [ua, msg] of [
+    ["", /Expected a non-empty value/],
+    ["  ", /Expected a non-empty value/],
+    ["€uro", /outside Latin-1 \(above U\+00FF\)/],
+    ["a b", /outside Latin-1/],
+    ["a\r\nX-Evil: 1", /control characters/],
+  ] as const) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["--user-agent", ua, "stations", "--count"], cli.deps), 2, JSON.stringify(ua));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), msg);
+  }
+  const ok = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["--user-agent", "Grüße\tbot/1", "stations", "--count"], ok.deps), 0);
+  assert.equal(ok.mt.last().headers?.["User-Agent"], "Grüße\tbot/1");
+});
+
+test("--count with --limit/--offset/--order-by/--fields is a usage error, no request", async () => {
+  for (const extra of [["--limit", "10"], ["--offset", "5"], ["--order-by", "Ort ASC"], ["--fields", "ID"]]) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(["stations", "--count", ...extra], cli.deps), 2, extra.join(" "));
+    assert.equal(cli.mt.calls.length, 0);
+    assert.match(cli.err.join("\n"), new RegExp(`--count cannot be combined with ${extra[0]}: it counts every match`));
+  }
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--count", "--limit", "10", "--offset", "116000"], cli.deps), 2);
+  assert.match(cli.err.join("\n"), /--count cannot be combined with --limit, --offset:/);
+});
+
+test("--count sends no paging parameters; a plain page still defaults to 50 rows", async () => {
+  const count = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--count"], count.deps), 0);
+  assert.equal(queryOf(count.mt.last()).has("resultRecordCount"), false);
+  const page = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["stations"], page.deps), 0);
+  assert.equal(queryOf(page.mt.last()).get("resultRecordCount"), "50");
+});
+
+test("--help names the --timeout and --max-retries defaults", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  assert.equal(await run(["--help"], cli.deps), 0);
+  const help = cli.out.join("\n").replace(/\s+/g, " ");
+  assert.match(help, /--timeout <ms> .*default 30000/);
+  assert.match(help, /--max-retries <n> .*default 2\b/);
+});
+
+test("an error a custom transport throws is a network error: exit 6, not 'Unexpected error'", async () => {
+  const cli = makeCli(() => {
+    throw Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+  });
+  // no retries: each one would be a WARN record first (test/retry-log.test.ts)
+  const code = await run(["--max-retries", "0", "stations", "--count"], cli.deps);
+  assert.equal(code, 6);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.http\] GET .* failed: read ECONNRESET/);
+  assert.doesNotMatch(cli.err.join("\n"), /Unexpected error/);
+});
+
+test("--geojson exits 1 with a parse error for a reply that is not a FeatureCollection", async () => {
+  for (const body of [{ foo: 1 }, { type: "FeatureCollection", features: "x" }]) {
+    const cli = makeCli(() => jsonResponse(body));
+    assert.equal(await run(["--compact", "stations", "--geojson"], cli.deps), 1, JSON.stringify(body));
+    assert.deepEqual(cli.out, []);
+    assert.match(cli.err.join("\n"), /Unexpected response shape from \/0\/query: expected a/);
+  }
+});
+
+test("info prints the layer's name and edit dates", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ name: "Ladesaeulen_einfach", editingInfo: { lastEditDate: 1790862802139, dataLastEditDate: 1790862802139 }, fields: [] }),
+  );
+  assert.equal(await run(["--compact", "info"], cli.deps), 0);
+  assert.deepEqual(JSON.parse(cli.out.join("")), {
+    name: "Ladesaeulen_einfach",
+    lastEditDate: "2026-10-01T13:53:22.139Z",
+    dataLastEditDate: "2026-10-01T13:53:22.139Z",
+    maxRecordCount: null,
+  });
+});
+
+test("a filter or group on a column the register never fills gets a stderr note, exit 0", async () => {
+  const col = "evses_evse_connectors_connector___max_electric_power_connector";
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--where", `${col} >= 150`, "--count"], cli.deps), 0);
+  assert.match(untimed(cli.err.join("\n")), new RegExp(`^INFO  \\[ladesaeulen\\.api\\] ${col} is empty on every row of the register`));
+  const grouped = makeCli(() => jsonResponse({ features: [{ attributes: { documentDate: null, count: 117584 } }] }));
+  assert.equal(await run(["count-by", "documentDate"], grouped.deps), 0);
+  assert.match(untimed(grouped.err.join("\n")), /^INFO  \[ladesaeulen\.api\] documentDate is empty on every row/);
+  // Steckersystem_Ladepunkt1 is filled; it must not be mistaken for Steckersystem_Ladepunkt10.
+  const quiet = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["stations", "--where", "Steckersystem_Ladepunkt1 LIKE '%DC%'", "--count"], quiet.deps), 0);
+  assert.deepEqual(quiet.err, []);
+});
+
+test("fields notes the columns that are empty on every row", async () => {
+  const cli = makeCli(() =>
+    jsonResponse({ fields: [{ name: "Ort", type: "esriFieldTypeString" }, { name: "json_type", type: "esriFieldTypeString" }] }),
+  );
+  assert.equal(await run(["fields"], cli.deps), 0);
+  assert.equal(untimed(cli.err.join("\n")), "INFO  [ladesaeulen.api] 1 of these columns are empty on every row of the register (checked 2026-10-06): json_type.");
+});
+
+test("an a:b@c argument (a User-Agent, a rejected value) is neither a credential in the log nor rewritten in the JSON on stdout (L14)", async () => {
+  const body = { features: [{ attributes: { Ort: "run:2026-10-09@x", count: 3 } }] };
+  const cli = makeCli(() => jsonResponse(body));
+  assert.equal(await run(["--user-agent", "run:2026-10-09@x", "count-by", "Ort"], cli.deps), 0);
+  assert.match(cli.out.join("\n"), /"value": "run:2026-10-09@x"/);
+  const typed = makeCli(() => jsonResponse(body));
+  assert.equal(await run(["--timeout", "run:2026-10-09@x", "count-by", "Ort"], typed.deps), 2);
+  assert.match(typed.err.join("\n"), /run:2026-10-09@x/);
+  assert.deepEqual(credentialsIn("run:2026-10-09@x"), []);
+  assert.deepEqual(credentialsIn("https://alice:pw@host"), ["alice:pw"]);
+});
+
+test("a run with options but no command logs an ERROR \"missing command\", then the help one INFO record per line (L5)", async () => {
+  const cli = makeCli(() => jsonResponse(fx.countOnly));
+  assert.equal(await run(["--compact"], cli.deps), 2);
+  const records = cli.err.map(untimed);
+  assert.equal(records[0], "ERROR [ladesaeulen.cli] missing command: `ladesaeulen <subcommand>`");
+  assert.ok(records.length > 3, records.join("\n"));
+  for (const record of records.slice(1)) assert.match(record, /^INFO  \[ladesaeulen\.cli\] .*\S$/);
+  assert.ok(records.some((record) => /\] Usage: ladesaeulen /.test(record)), records.join("\n"));
+  assert.deepEqual(cli.out, []);
+});
+
+test("a parse error is logged in the format commander would have parsed (L6)", async () => {
+  const isJsonl = (line: string): boolean => line.startsWith("{");
+  const cases: [string[], boolean][] = [
+    // forbidRepeatedOptions keeps the first --log-format and rejects the second.
+    [["--log-format", "jsonl", "--log-format", "text", "stations"], true],
+    [["--log-format", "text", "--log-format", "jsonl", "stations"], false],
+    // --log-format is --user-agent's value; "jsonl" is then an unknown command.
+    [["--user-agent", "--log-format", "jsonl", "stations"], false],
+    // commander takes the program's --log-format out first; --where is left without its value.
+    [["stations", "--where", "--log-format", "jsonl"], true],
+  ];
+  for (const [argv, jsonl] of cases) {
+    const cli = makeCli(() => jsonResponse(fx.countOnly));
+    assert.equal(await run(argv, cli.deps), 2, argv.join(" "));
+    assert.ok(cli.err.length > 0 && cli.err.every((line) => isJsonl(line) === jsonl), `${argv.join(" ")}:\n${cli.err.join("\n")}`);
+  }
+});
