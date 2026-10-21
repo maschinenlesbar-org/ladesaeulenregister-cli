@@ -48,6 +48,34 @@ test("getJson throws LadesaeulenParseError on invalid JSON", async () => {
   await assert.rejects(() => e.getJson("/x"), LadesaeulenParseError);
 });
 
+test("a number JSON.parse can't carry exactly is a LadesaeulenParseError, never a changed value", async () => {
+  // Out of a double's range, past 2^53 in any written form, or non-zero and too small for one.
+  for (const literal of [
+    "1e400",
+    "12345678901234567890",
+    "12345678901234567890.0",
+    "9007199254740993e0",
+    "9007199254740992.5",
+    "1e-400",
+  ]) {
+    const mt = makeMockTransport(() => rawResponse(`{"count":${literal}}`, "application/json"));
+    const e = new RequestEngine({ transport: mt.transport });
+    await assert.rejects(() => e.getJson("/0/query"), (err: unknown) => {
+      assert.ok(err instanceof LadesaeulenParseError, literal);
+      assert.equal(err.message, `Unexpected response from /0/query: the number ${literal} cannot be represented exactly.`);
+      return true;
+    });
+  }
+});
+
+test("a number a double carries (a decimal fraction below 2^53 too) passes; a number inside a string is not read", async () => {
+  const body =
+    '{"a":9007199254740991,"b":9007199254740992.0,"kw":22.08,"lat":52.520008,"t":1759276800000,"z":0.0e-500,"s":"12345678901234567890 \\" 1e400"}';
+  const mt = makeMockTransport(() => rawResponse(body, "application/json"));
+  const e = new RequestEngine({ transport: mt.transport });
+  assert.deepEqual(await e.getJson("/0/query"), JSON.parse(body));
+});
+
 test("a non-2xx surfaces as a LadesaeulenApiError with the parsed error.message", async () => {
   const mt = makeMockTransport(() => jsonResponse({ error: { message: "kaputt" } }, 400));
   const e = new RequestEngine({ transport: mt.transport });

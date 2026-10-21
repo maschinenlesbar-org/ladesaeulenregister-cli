@@ -254,6 +254,13 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `count()` a non-negative integer `count`, `fields()` a `fields` array, and `geojson()`
   a `FeatureCollection` with a `features` array of objects. `null`, `{}`, a string or
   an HTML page is a `LadesaeulenParseError` (exit 1), never data or an empty map.
+  So is a number `JSON.parse` can't carry exactly (`firstInexactNumber` in `getJson`): out
+  of a double's range (`1e400`), past 2^53 in any written form (`12345678901234567890`,
+  `9007199254740993e0`, `9007199254740992.5`), or non-zero and too small (`1e-400`) —
+  `Unexpected response from /0/query: the number <N> cannot be represented exactly.` A
+  decimal fraction below 2^53 (a power of `22.08`, a coordinate) keeps a double's
+  precision; the register's numbers (OBJECTIDs, epoch-ms dates, kW, degrees) are all
+  well inside that.
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).
