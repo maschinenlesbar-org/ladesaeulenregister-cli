@@ -99,8 +99,9 @@ ladesaeulen stations --count
   request per 2,000, so narrow `--where` first for a nationwide question.
 - **Power and charge-point count are text columns.** `ladesaeulen fields` lists
   `max_electric_power_station` and `Anzahl_Ladepunkte` as `esriFieldTypeString`.
-  `max_electric_power_station >= 150` fails with `ArcGIS error 400 … Invalid query
-  parameters` (some values have decimals), so wrap the column in
+  `max_electric_power_station >= 150` fails with `ArcGIS error 400 for GET …: Unable to
+  perform query. Please check your parameters.` (exit 1; the server's wording may change, the
+  `ArcGIS error 400` stays), so wrap the column in
   `CAST(max_electric_power_station AS FLOAT)` in `--where` **and** `--order-by`: a plain
   `--order-by "max_electric_power_station DESC"` sorts as text (`"99"` above `"400"`).
   Check a column's `type` in `ladesaeulen fields` before comparing it with a number.
