@@ -70,8 +70,8 @@ never printing them); stdout and the exit code are unchanged. See [Usage.md](htt
 stdout carries the JSON only. Each line on stderr is a **log record**: a timestamp (UTC), a
 level (`ERROR`, `WARN`, `INFO`) and a topic, the program and the area it comes from
 (`ladesaeulen.cli` for usage errors, `ladesaeulen.api` for the API's answers and the notes on
-them, an ArcGIS `error` envelope and a malformed answer included, `ladesaeulen.http` for the connection, `ladesaeulen.output` for a failed write to
-stdout). An error about an answer names the request (`GET <url>: the answer is not valid
+them, an ArcGIS `error` envelope and a malformed answer included, `ladesaeulen.http` for the connection, `ladesaeulen.output` for writing the result: a failed
+or cut-short write to stdout, an answer too deeply nested or too large to print). An error about an answer names the request (`GET <url>: the answer is not valid
 JSON`). Text in an answer is never changed silently: bytes that are not valid in its charset
 and half characters (lone surrogates) are replaced with U+FFFD, so the output stays readable
 for `jq`, and a `WARN` record of `ladesaeulen.api` says how many. By default it is written log4j style;
