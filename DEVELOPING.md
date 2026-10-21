@@ -266,9 +266,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   an HTML page is a `LadesaeulenParseError` (exit 1), never data or an empty map.
   So is a number `JSON.parse` can't carry exactly (`firstInexactNumber` in `getJson`): out
   of a double's range (`1e400`), past 2^53 in any written form (`12345678901234567890`,
-  `9007199254740993e0`, `9007199254740992.5`), or non-zero and too small (`1e-400`) —
+  `9007199254740993e0`, `9007199254740992.5`), non-zero and too small (`1e-400`), or a
+  subnormal that does not print as written (`3e-324` would become `5e-324`) —
   `Unexpected response from /0/query: the number <N> cannot be represented exactly.` Past
-  2^53 the check compares the number as written with the number as printed
+  2^53 and below the smallest normal double (2.2250738585072014e-308) the check compares the number as written with the number as printed
   (`String(value)`, `decimalOf`), not with the double's exact binary value:
   `12345678901234567890` prints as `12345678901234567000` and is refused, while `1E23` or
   an ArcGIS sentinel like `1.7976931348623157E308` print as the same number and pass. A

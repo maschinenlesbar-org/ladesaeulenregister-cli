@@ -56,6 +56,8 @@ test("a number JSON.parse can't carry exactly is a LadesaeulenParseError, never 
     "12345678901234567890", "-9007199254740993", "1e400", "-1E400", "12345678901234567890.0", "9007199254740993e0",
     "90071992547409930E-1", "9007199254740992.5", "-9007199254740992.5", "1e-400", "-0.0001e-399",
     "123456789012345678901234567890",
+    // Below the smallest normal double a subnormal has fewer digits: 3e-324 became 5e-324.
+    "3e-324", "4e-324", "-4.9e-324", "1.2345678901234567e-310", "2.225073858507201e-309",
   ]) {
     const mt = makeMockTransport(() => rawResponse(body(literal), "application/json"));
     const e = new RequestEngine({ transport: mt.transport });
@@ -70,6 +72,8 @@ test("a number JSON.parse can't carry exactly is a LadesaeulenParseError, never 
     ["9007199254740991", 9007199254740991], ["9007199254740992.0", 2 ** 53], ["9007199254740992e0", 2 ** 53],
     ["90071992547409920E-1", 2 ** 53], ["1e21", 1e21], ["1.2e21", 1.2e21], ["0", 0], ["-0", -0], ["0.0e-500", 0],
     ["1.10", 1.1], ["0.1", 0.1], ["1.00000000000000001", 1], ["5e-324", 5e-324],
+    // A subnormal or the smallest normal double that prints as written.
+    ["-5e-324", -5e-324], ["1e-310", 1e-310], ["2.2250738585072014e-308", 2.2250738585072014e-308],
     // A double a server printed in its shortest form reads back as that double and prints as the
     // same number: not a changed value, though the decimal is not the double's exact binary value
     // (an ArcGIS sentinel like 1.7976931348623157E308 in a layer document).
