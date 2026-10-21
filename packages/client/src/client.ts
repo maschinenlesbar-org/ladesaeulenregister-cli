@@ -13,7 +13,17 @@
 import { RequestEngine, type EngineOptions } from "./engine.js";
 import { LadesaeulenParseError, LadesaeulenValidationError, cutForMessage, quoteValue } from "./errors.js";
 import type { QueryParams } from "./query.js";
-import { assertValid, countQueryProblem } from "./validate.js";
+import {
+  assertValid,
+  countQueryProblem,
+  normalizeOutFields,
+  normalizeText,
+  normalizeToken,
+  orderByProblem,
+  outFieldsProblem,
+  textProblem,
+  tokenProblem,
+} from "./validate.js";
 import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw } from "./power.js";
 import type {
   ArcGisQueryResponse,
@@ -59,7 +69,9 @@ export const DEFAULT_FIELDS = [
 const COLUMN_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 
 /**
- * Check and trim a `countBy` field name. ArcGIS groups by a comma-separated list
+ * Check and canonicalise a `countBy` field name: trimmed and in composed Unicode (NFC, so a
+ * decomposed "Straße" pasted from a file name is the column), with no control, format or
+ * invisible character (`tokenProblem`). ArcGIS groups by a comma-separated list
  * too, but each group then carries several values and `CountByRow` has room for
  * one, so a list is refused rather than returning `value: null` for every group.
  * Anything else that is not one column name (a line break, a space, a bracket, a
@@ -68,10 +80,12 @@ const COLUMN_NAME = /^[\p{L}_][\p{L}\p{N}_]*$/u;
  * one `countBy` reads the groups from.
  */
 function groupField(field: string): string {
-  const name = typeof field === "string" ? field.trim() : "";
-  if (name === "") {
+  if (typeof field !== "string" || field.trim() === "") {
     throw new LadesaeulenValidationError(`Invalid field: expected a field name, got ${show(field)}.`);
   }
+  const problem = tokenProblem(field);
+  if (problem !== undefined) throw new LadesaeulenValidationError(`Invalid field: ${problem}`);
+  const name = normalizeToken(field);
   if (name.includes(",")) {
     throw new LadesaeulenValidationError(
       `Invalid field: expected one field name, got a list: ${show(name)}. ` +
@@ -200,10 +214,15 @@ function invalid(name: string, expected: string, value: unknown): LadesaeulenVal
   return new LadesaeulenValidationError(`Invalid ${name}: expected ${expected}, got ${show(value)}.`);
 }
 
-/** A present text parameter must be a non-blank string (ArcGIS reads `where=` as an error, not "all"). */
-function checkText(name: string, value: unknown): void {
+/**
+ * A present text parameter must be a string that `problem` accepts: not blank, not only
+ * invisible characters (ArcGIS reads `where=` as an error, not "all"), no lone surrogate,
+ * control or format character.
+ */
+function checkText(name: string, value: unknown, problem: (value: string) => string | undefined = textProblem): void {
   if (value === undefined) return;
-  if (typeof value !== "string" || value.trim() === "") throw invalid(name, "a non-empty string", value);
+  if (typeof value !== "string") throw invalid(name, "a non-empty string", value);
+  assertValid(name, value, problem);
 }
 
 function checkInt(name: string, value: unknown, min: number, max: number): void {
@@ -269,8 +288,8 @@ function queryArg(q: unknown): StationQuery {
  */
 function checkQuery(q: StationQuery): void {
   checkText("where", q.where);
-  checkText("outFields", q.outFields);
-  checkText("orderBy", q.orderBy);
+  checkText("outFields", q.outFields, outFieldsProblem);
+  checkText("orderBy", q.orderBy, orderByProblem);
   checkInt("limit", q.limit, 1, MAX_LIMIT);
   checkInt("offset", q.offset, 0, Number.MAX_SAFE_INTEGER);
   if (q.minChargePointKw !== undefined) {
@@ -333,16 +352,21 @@ export class LadesaeulenClient {
   /** Build the shared feature-query params (where / outFields / paging / near). */
   private buildParams(q: StationQuery, extra: QueryParams): QueryParams {
     checkQuery(q);
-    const p: QueryParams = { where: q.where ?? "1=1", ...extra };
+    // Every value goes out canonical: a where trimmed and NFC, each field and the sort key too.
+    const where = q.where === undefined ? "1=1" : normalizeText(q.where);
+    const p: QueryParams = { where, ...extra };
     if (q.minChargePointKw !== undefined) {
       // Exact, not a guess: max_charge_point_kw is capped at the station figure, so a row
       // that passes has a station figure of at least the minimum.
-      p.where = `(${q.where ?? "1=1"}) AND CAST(max_electric_power_station AS FLOAT) >= ${q.minChargePointKw}`;
+      p.where = `(${where}) AND CAST(max_electric_power_station AS FLOAT) >= ${q.minChargePointKw}`;
     }
-    if (q.outFields !== undefined) p.outFields = q.minChargePointKw === undefined ? q.outFields : withPowerFields(q.outFields);
+    if (q.outFields !== undefined) {
+      const fields = normalizeOutFields(q.outFields);
+      p.outFields = q.minChargePointKw === undefined ? fields : withPowerFields(fields);
+    }
     if (q.limit !== undefined) p.resultRecordCount = q.limit;
     if (q.offset !== undefined) p.resultOffset = q.offset;
-    if (q.orderBy !== undefined) p.orderByFields = q.orderBy;
+    if (q.orderBy !== undefined) p.orderByFields = normalizeToken(q.orderBy);
     if (q.near) {
       p.geometry = `${q.near.lon},${q.near.lat}`;
       p.geometryType = "esriGeometryPoint";
@@ -477,7 +501,7 @@ export class LadesaeulenClient {
     const name = groupField(field);
     checkText("where", where);
     const params: QueryParams = {
-      where,
+      where: normalizeText(where),
       f: "json",
       groupByFieldsForStatistics: name,
       outStatistics: JSON.stringify([

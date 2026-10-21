@@ -65,7 +65,7 @@ function commandPath(command: Command): string {
  */
 function writeCommanderErr(command: Command, deps: CliDeps, state: { errorLogged: boolean }, str: string): void {
   const log = logOf(deps);
-  const text = str.replace(/\n$/, "");
+  const text = escapeFormatChars(str.replace(/\n$/, ""));
   // The blank line commander writes between an error and the help it shows after.
   if (text.trim() === "") return;
   if (text.startsWith("error: ")) {
@@ -78,6 +78,17 @@ function writeCommanderErr(command: Command, deps: CliDeps, state: { errorLogged
     log.error("cli", `missing command: \`${commandPath(command)} <subcommand>\``);
   }
   for (const line of text.split("\n")) if (line.trim() !== "") log.info("cli", line.trimEnd());
+}
+
+/**
+ * `text` with every Unicode format character (a zero-width space, a soft hyphen, a bidi
+ * control) written as `\uXXXX`. commander echoes a refused value raw (`command-argument value
+ * '<value>' is invalid`); the record escapes controls and bidi controls, and this keeps the
+ * invisible ones visible too, so a refusal of `Ort<ZWSP>` never reads like one of `Ort`. The
+ * library escapes the values it quotes itself (`quoteValue`).
+ */
+function escapeFormatChars(text: string): string {
+  return text.replace(/\p{Cf}/gu, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 
 /**
@@ -152,6 +163,8 @@ export function redactionFor(argv: readonly string[]): Redaction {
     for (const secret of credentialsIn(source)) {
       secrets.add(secret);
       secrets.add(JSON.stringify(secret).slice(1, -1));
+      // As commander's echo of it reaches the log (format characters escaped).
+      secrets.add(escapeFormatChars(secret));
       // What a server echoes back: the Basic value and the decoded user:password on
       // stdout and stderr, the password alone (it may well occur in the data) on stderr.
       const [basic, pair, password] = echoedCredentialForms(secret);

@@ -15,7 +15,10 @@ import {
   parseBoundedInt,
   parseIntArg,
   parseLatLon,
-  parseNonEmpty,
+  parseFieldList,
+  parseOrderBy,
+  parseText,
+  parseToken,
   parsePointKw,
   parseRadiusKm,
 } from "../shared.js";
@@ -117,7 +120,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
   program
     .command("stations")
     .description("Search charging stations (Ladeeinrichtungen)")
-    .option("--where <sql>", "SQL filter, e.g. \"Ort='Berlin' AND Typ='Schnellladeeinrichtung'\"", parseNonEmpty)
+    .option("--where <sql>", "SQL filter, e.g. \"Ort='Berlin' AND Typ='Schnellladeeinrichtung'\"", parseText)
     .option(
       "--limit <n>",
       `max rows per request (1..${MAX_LIMIT}, default ${DEFAULT_LIMIT}; the server returns at most ~2000 — page with --offset)`,
@@ -127,9 +130,9 @@ export function registerCommands(program: Command, deps: CliDeps): void {
     .option(
       "--order-by <spec>",
       "sort, e.g. \"Ort ASC\" or \"CAST(max_electric_power_station AS FLOAT) DESC\" (power is a text column)",
-      parseNonEmpty,
+      parseOrderBy,
     )
-    .option("--fields <list>", "comma-separated field list, or '*' for all (see `fields`)", parseNonEmpty)
+    .option("--fields <list>", "comma-separated field list, or '*' for all (see `fields`)", parseFieldList)
     .option("--near <lat,lon>", "only stations near this WGS84 point (needs --radius)", parseLatLon)
     .option("--radius <km>", "search radius in km for --near (0.001..1000)", parseRadiusKm)
     .option(
@@ -176,8 +179,8 @@ export function registerCommands(program: Command, deps: CliDeps): void {
   program
     .command("count-by")
     .description("Count stations grouped by a field, e.g. `count-by state` (per Bundesland)")
-    .argument("<field>", "one field to group by (e.g. state, Typ, operator_companyName, Ort)", parseNonEmpty)
-    .option("--where <sql>", "restrict to matching stations first", parseNonEmpty)
+    .argument("<field>", "one field to group by (e.g. state, Typ, operator_companyName, Ort)", parseToken)
+    .option("--where <sql>", "restrict to matching stations first", parseText)
     .action(
       action(deps, async ({ client, global, opts }, [field]) => {
         const where = typeof opts["where"] === "string" ? opts["where"] : "1=1";

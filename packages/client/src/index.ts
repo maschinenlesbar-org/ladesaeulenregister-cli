@@ -47,6 +47,15 @@ export {
   headerNameProblem,
   headerValueProblem,
   intRangeProblem,
+  listProblem,
+  normalizeOutFields,
+  normalizeText,
+  normalizeToken,
+  orderByProblem,
+  outFieldsProblem,
+  splitList,
+  textProblem,
+  tokenProblem,
 } from "./validate.js";
 export type { Problem } from "./validate.js";
 export type { QueryParams, QueryValue } from "./query.js";
@@ -59,6 +68,7 @@ export {
   credentialsIn,
   cutForMessage,
   MAX_MESSAGE_VALUE_LENGTH,
+  quoteValue,
   redactCredentials,
   redactUrl,
 } from "./errors.js";

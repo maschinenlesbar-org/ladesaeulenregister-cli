@@ -27,11 +27,11 @@ ladesaeulen [global options] <command> [command options]
 
 | Option | Description |
 |---|---|
-| `--where <sql>` | SQL filter, e.g. `"Ort='Berlin' AND Typ='Schnellladeeinrichtung'"` |
+| `--where <sql>` | SQL filter, e.g. `"Ort='Berlin' AND Typ='Schnellladeeinrichtung'"`. Sent trimmed and in composed Unicode (NFC); a value that is blank or only invisible characters, or that holds a control character (but tab and line breaks), a format character (a zero-width space, a soft hyphen, a bidi control) or half a character is a usage error |
 | `--limit <n>` | max rows per request (1..10000, default 50). The server returns **at most ~2000** — page the rest with `--offset` |
 | `--offset <n>` | rows to skip (paging) |
-| `--order-by <spec>` | sort, e.g. `"Ort ASC"` or `"CAST(max_electric_power_station AS FLOAT) DESC"` (power is a text column; without the cast it sorts as text) |
-| `--fields <list>` | comma-separated field list, or `'*'` for all |
+| `--order-by <spec>` | sort, e.g. `"Ort ASC"` or `"CAST(max_electric_power_station AS FLOAT) DESC"` (power is a text column; without the cast it sorts as text). Column names, `ASC`/`DESC`, `CAST(…)`, commas and spaces only; trimmed and NFC, an invisible or control character is a usage error |
+| `--fields <list>` | comma-separated field list, or `'*'` for all. Each item is sent trimmed and NFC; an empty item (`Ort,,state`, `Ort,`) or one with an invisible or control character is a usage error |
 | `--near <lat,lon>` | only stations near this WGS84 point (needs `--radius`) |
 | `--radius <km>` | search radius in km for `--near`: a plain decimal from `0.001` (1 m) to `1000` |
 | `--min-point-kw <kW>` | only stations where **one charge point** can deliver at least this many kW (a plain decimal above 0, at most 10000). Read from the connector ratings in `Steckersystem_Ladepunkt1..10`, capped at the station figure; each row gets the derived `max_charge_point_kw`, and the connector columns are added to `--fields`. The server filters on the station figure and the CLI on the ratings, so a page can be shorter than `--limit`; with `--count` the CLI reads every candidate, one request per 2,000 |

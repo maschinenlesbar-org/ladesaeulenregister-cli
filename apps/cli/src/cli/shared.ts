@@ -5,7 +5,14 @@ import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
 import { logOf, type CliDeps } from "./io.js";
 import { MAX_CHARGE_POINT_KW, MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/client";
-import { baseUrlProblem, headerValueProblem } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/validate";
+import {
+  baseUrlProblem,
+  headerValueProblem,
+  orderByProblem,
+  outFieldsProblem,
+  textProblem,
+  tokenProblem,
+} from "@maschinenlesbar.org/ladesaeulenregister-client/internal/validate";
 import { DEFAULT_BASE_URL, cleartextProblem, type RetryEvent } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/engine";
 
 /**
@@ -26,13 +33,38 @@ export function parseIntArg(value: string): number {
   return n;
 }
 
-/** commander value-parser: a non-empty (after trimming) string. */
-export function parseNonEmpty(value: string): string {
-  if (value.trim() === "") {
-    throw new InvalidArgumentError("Expected a non-empty value.");
-  }
-  return value;
+/** A commander value-parser from a library rule: its reason becomes the usage error (exit 2); the value goes on as typed. */
+function parserOf(problem: (value: string) => string | undefined): (value: string) => string {
+  return (value) => {
+    const reason = problem(value);
+    if (reason !== undefined) throw new InvalidArgumentError(reason);
+    return value;
+  };
 }
+
+/**
+ * commander value-parser for SQL text (`--where`): the library's `textProblem` (not blank, not
+ * only invisible characters, no lone surrogate, control or format character), as a usage error
+ * before any request. The library trims it and sends it in composed Unicode (`normalizeText`).
+ */
+export const parseText = parserOf(textProblem);
+
+/**
+ * commander value-parser for a token (`count-by <field>`): the library's `tokenProblem` (not
+ * blank, no control, format or invisible character, no lone surrogate). The library trims it,
+ * composes it (NFC) and checks that it is one column name.
+ */
+export const parseToken = parserOf(tokenProblem);
+
+/** commander value-parser for `--order-by`: the library's `orderByProblem` (a token in the documented sort syntax). */
+export const parseOrderBy = parserOf(orderByProblem);
+
+/**
+ * commander value-parser for `--fields`: the library's `outFieldsProblem`, a comma-separated
+ * list whose every item is a token (an empty or invisible item is refused, never dropped). The
+ * library sends each item trimmed and composed (`normalizeOutFields`).
+ */
+export const parseFieldList = parserOf(outFieldsProblem);
 
 /**
  * commander value-parser for `--base-url`: the library's `baseUrlProblem` (a

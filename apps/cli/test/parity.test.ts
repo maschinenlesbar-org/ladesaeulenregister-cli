@@ -369,7 +369,12 @@ test("parity: count-by with a field that is no single column name is a usage err
   );
   assert.equal(cli.code, 2);
   assert.equal(cli.requests.length, 0);
-  assert.equal(cli.err, 'ERROR [ladesaeulen.cli] Invalid field: expected one column name (letters, digits and _), got "Ort\\nx".');
+  assert.match(cli.err, /^ERROR \[ladesaeulen\.cli\] command-argument value 'Ort\\nx' is invalid for argument 'field'\. "Ort\\nx" contains an invisible or control character \(U\+000A\)\./);
+  // One without a control character is refused by the library's column rule, on both sides.
+  const spaced = await parity(["count-by", "Ort x"], (transport) => new LadesaeulenClient({ transport }).countBy("Ort x"));
+  assert.equal(spaced.cli.code, 2);
+  assert.equal(spaced.cli.err, 'ERROR [ladesaeulen.cli] Invalid field: expected one column name (letters, digits and _), got "Ort x".');
+  assert.equal(spaced.cli.requests.length + spaced.lib.requests.length, 0);
   assert.equal(res.ok, false);
   assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError);
   assert.equal(res.requests.length, 0);

@@ -50,6 +50,12 @@ ladesaeulen info                                               # how current the
   and `--count` (just the number) or `--geojson` output.
 - **`count-by <field>`** aggregates (e.g. per `state`, `Typ`, `operator_companyName`).
 - **`fields`** lists the queryable columns (build `--where`/`--fields`/`count-by`).
+
+Every value you type is sent trimmed and in composed Unicode (NFC), or refused before any
+request (exit 2): a blank value or one of only invisible characters, half a character, a
+control character or an invisible format character (a zero-width space, a soft hyphen, a bidi
+control; `--where` keeps tabs, line breaks and ZWJ). A refusal shows such a character escaped
+(`\u200b`).
 - **`info`** prints the layer's last edit date (`dataLastEditDate`), the register's as-of
   date: the data is a snapshot, refreshed irregularly, and no row carries a date.
 

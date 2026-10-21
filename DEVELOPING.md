@@ -161,9 +161,16 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   (`GET <url> failed: <reason>`, URL redacted, the original as `cause`).
   `apps/cli/test/conformance-p5-transport-contract.test.ts` checks it.
 - **The client validates its own arguments** before any request (not only the CLI):
-  `where`/`outFields`/`orderBy` non-blank, `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
+  `where` passes `textProblem` and is sent as `normalizeText` gives it (trimmed, NFC; not
+  blank or only invisible characters, no lone surrogate, no control character but TAB/LF/CR,
+  no format character but ZWNJ/ZWJ), `outFields` passes `outFieldsProblem` (a comma list of
+  tokens, no empty item; sent item by item trimmed and NFC, `normalizeOutFields`), `orderBy`
+  passes `orderByProblem` (a token — no control, format or invisible character — in the
+  documented sort syntax: column names, `ASC`/`DESC`, `CAST(…)`, commas, spaces; sent as
+  `normalizeToken`), `limit` 1..`MAX_LIMIT`, `offset` ≥ 0,
   `near` lat/lon in range and `radiusKm` `MIN_RADIUS_KM`..`MAX_RADIUS_KM`, a single
-  `countBy` field that is one column name (letters, digits and `_`: no list, no line
+  `countBy` field that is a token (`tokenProblem`; trimmed and NFC, so a decomposed name is
+  the column) and one column name (letters, digits and `_`: no list, no line
   break, space, bracket or quote, which the live server answered with a body that was
   not JSON), and no key outside `STATION_QUERY_KEYS` (`where`,
   `outFields`, `limit`, `offset`, `orderBy`, `near`) or `near`'s `lat`/`lon`/`radiusKm`
@@ -381,8 +388,10 @@ small heap: a large flat answer prints with `--compact`, an answer full of DEL c
 escaped or, past V8's longest string, is one ERROR record; and a lone surrogate or invalid bytes
 are replaced with U+FFFD and reported in a WARN record, on the CLI and in the library. The kit rollout
 of 2026-10-21 added P24 (`conformance-p24-input-corpus`: an input is canonicalised or refused,
-never sent raw; both lists are empty here, since `--where` is SQL the client sends as written
-and no id goes into a path) and P25 (`conformance-p25-response-corpus`: a number a double
+never sent raw: the text inputs are `--where` of `stations` and `count-by`, the tokens
+`--order-by` and the `count-by` field, the list `--fields`; no id goes into a path. The adapter
+puts a long query's POST form body back into the recorded URL, so a 5,000-character `--where`
+is read like a short one) and P25 (`conformance-p25-response-corpus`: a number a double
 can't carry exactly, or an empty answer, is an error on the CLI and in the library, read on a
 station's latitude). P26 (`conformance-p26-output-integrity`) runs with `HAS_OUTPUT_OPTION =
 false`: the CLI has no `-o`, so only its stdout case runs (stdout redirected to a file and cut

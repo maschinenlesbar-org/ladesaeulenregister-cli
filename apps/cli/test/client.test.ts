@@ -209,11 +209,13 @@ test("countBy() refuses a field name that is no single column name (a line break
   // JSON ("the answer is not valid JSON", 2026-10-09 result 05 B05-1).
   for (const field of ["Ort\nx", "Ort x", "Ort)", "UPPER(Ort)", "Ort;--", "\"Ort\""]) {
     const { client, mt } = clientFor(fx.countByState);
+    // A control character is refused as one (every token rule), the rest as no column name.
+    const reason = field.includes("\n")
+      ? `${JSON.stringify(field)} contains an invisible or control character (U+000A).`
+      : `expected one column name (letters, digits and _), got ${JSON.stringify(field)}.`;
     await assert.rejects(
       () => client.countBy(field),
-      (err) =>
-        err instanceof LadesaeulenValidationError &&
-        err.message === `Invalid field: expected one column name (letters, digits and _), got ${JSON.stringify(field)}.`,
+      (err) => err instanceof LadesaeulenValidationError && err.message === `Invalid field: ${reason}`,
       JSON.stringify(field),
     );
     assert.equal(mt.calls.length, 0, JSON.stringify(field));
@@ -360,10 +362,13 @@ test("the client validates its query before any request (LadesaeulenValidationEr
     ["radius", (c) => c.count({ near: { lat: 52, lon: 13, radiusKm: -5 } }), "Invalid near.radiusKm: expected a number from 0.001 to 1000, got -5."],
     ["limit", (c) => c.stations({ limit: -3 }), "Invalid limit: expected an integer from 1 to 10000, got -3."],
     ["offset", (c) => c.stations({ offset: 1.5 }), "Invalid offset: expected an integer from 0 to 9007199254740991, got 1.5."],
-    ["where", (c) => c.count({ where: "" }), 'Invalid where: expected a non-empty string, got "".'],
-    ["orderBy", (c) => c.geojson({ orderBy: " " }), 'Invalid orderBy: expected a non-empty string, got " ".'],
+    ["where", (c) => c.count({ where: "" }), "Invalid where: Expected a non-empty value."],
+    ["where of invisible characters", (c) => c.count({ where: "\u200b\u00ad" }), "Invalid where: Expected a non-empty value."],
+    ["orderBy", (c) => c.geojson({ orderBy: " " }), "Invalid orderBy: Expected a non-empty value."],
+    ["orderBy syntax", (c) => c.stations({ orderBy: "Ort/../x" }), 'Invalid orderBy: expected column names with ASC or DESC, e.g. "Ort ASC" or "CAST(max_electric_power_station AS FLOAT) DESC", got "Ort/../x".'],
+    ["outFields item", (c) => c.stations({ outFields: "Ort,,state" }), "Invalid outFields: item 2 of 3: Expected a non-empty value."],
     ["countBy field", (c) => c.countBy("", ""), 'Invalid field: expected a field name, got "".'],
-    ["countBy where", (c) => c.countBy("state", ""), 'Invalid where: expected a non-empty string, got "".'],
+    ["countBy where", (c) => c.countBy("state", ""), "Invalid where: Expected a non-empty value."],
   ];
   for (const [label, call, message] of cases) {
     const { client, mt } = clientFor(fx.countOnly);
