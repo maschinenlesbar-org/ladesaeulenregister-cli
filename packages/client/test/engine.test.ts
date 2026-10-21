@@ -49,22 +49,37 @@ test("getJson throws LadesaeulenParseError on invalid JSON", async () => {
 });
 
 test("a number JSON.parse can't carry exactly is a LadesaeulenParseError, never a changed value", async () => {
-  // Out of a double's range, past 2^53 in any written form, or non-zero and too small for one.
+  // JSON.parse rounds 12345678901234567890 (in any form: .0, e0, E-1) and 9007199254740992.5 to the
+  // nearest double, turns 1e400 into Infinity (printed as null) and 1e-400 into 0, silently.
+  const body = (n: string) => `{"count":${n},"text":"12345678901234567890 in a string"}`;
   for (const literal of [
-    "1e400",
-    "12345678901234567890",
-    "12345678901234567890.0",
-    "9007199254740993e0",
-    "9007199254740992.5",
-    "1e-400",
+    "12345678901234567890", "-9007199254740993", "1e400", "-1E400", "12345678901234567890.0", "9007199254740993e0",
+    "90071992547409930E-1", "9007199254740992.5", "-9007199254740992.5", "1e-400", "-0.0001e-399",
+    "123456789012345678901234567890",
   ]) {
-    const mt = makeMockTransport(() => rawResponse(`{"count":${literal}}`, "application/json"));
+    const mt = makeMockTransport(() => rawResponse(body(literal), "application/json"));
     const e = new RequestEngine({ transport: mt.transport });
     await assert.rejects(() => e.getJson("/0/query"), (err: unknown) => {
       assert.ok(err instanceof LadesaeulenParseError, literal);
       assert.equal(err.message, `Unexpected response from /0/query: the number ${literal} cannot be represented exactly.`);
       return true;
     });
+  }
+  // What a double carries exactly, or as JSON means it (a decimal fraction below 2^53), passes.
+  const exact: Array<[string, number]> = [
+    ["9007199254740991", 9007199254740991], ["9007199254740992.0", 2 ** 53], ["9007199254740992e0", 2 ** 53],
+    ["90071992547409920E-1", 2 ** 53], ["1e21", 1e21], ["1.2e21", 1.2e21], ["0", 0], ["-0", -0], ["0.0e-500", 0],
+    ["1.10", 1.1], ["0.1", 0.1], ["1.00000000000000001", 1], ["5e-324", 5e-324],
+    // A double a server printed in its shortest form reads back as that double and prints as the
+    // same number: not a changed value, though the decimal is not the double's exact binary value
+    // (an ArcGIS sentinel like 1.7976931348623157E308 in a layer document).
+    ["1e23", 1e23], ["100000000000000000000000", 1e23], ["1E23", 1e23], ["1.7976931348623157E308", Number.MAX_VALUE], ["-1.7976931348623157e308", -Number.MAX_VALUE],
+    ["4.35e30", 4.35e30],
+  ];
+  for (const [literal, value] of exact) {
+    const mt = makeMockTransport(() => rawResponse(body(literal), "application/json"));
+    const e = new RequestEngine({ transport: mt.transport });
+    assert.equal((await e.getJson<{ count: number }>("/0/query")).count, value, literal);
   }
 });
 

@@ -267,7 +267,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   So is a number `JSON.parse` can't carry exactly (`firstInexactNumber` in `getJson`): out
   of a double's range (`1e400`), past 2^53 in any written form (`12345678901234567890`,
   `9007199254740993e0`, `9007199254740992.5`), or non-zero and too small (`1e-400`) —
-  `Unexpected response from /0/query: the number <N> cannot be represented exactly.` A
+  `Unexpected response from /0/query: the number <N> cannot be represented exactly.` Past
+  2^53 the check compares the number as written with the number as printed
+  (`String(value)`, `decimalOf`), not with the double's exact binary value:
+  `12345678901234567890` prints as `12345678901234567000` and is refused, while `1E23` or
+  an ArcGIS sentinel like `1.7976931348623157E308` print as the same number and pass. A
   decimal fraction below 2^53 (a power of `22.08`, a coordinate) keeps a double's
   precision; the register's numbers (OBJECTIDs, epoch-ms dates, kW, degrees) are all
   well inside that.
