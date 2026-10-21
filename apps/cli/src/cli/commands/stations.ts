@@ -55,16 +55,19 @@ function truncationNote(rows: number, limit: number, filtered = false): string {
 
 /**
  * The stderr note for columns the register never fills (`EMPTY_FIELDS`) named in a filter,
- * sort, field list or group: their filters match nothing and their groups are one null
- * group, with exit 0, so say so rather than let the 0 read like an answer.
+ * sort, field list or group: `IS NULL` on them matches every row, any other condition none,
+ * and their groups are one null group, with exit 0, so say so rather than let the count or
+ * the 0 read like an answer about the column.
  */
 function emptyFieldsNote(deps: CliDeps, texts: Array<string | undefined>): void {
-  const names = [...new Set(texts.flatMap((t) => (t === undefined ? [] : emptyFieldsIn(t))))];
+  const names = EMPTY_FIELDS.filter((name) => texts.some((t) => t !== undefined && emptyFieldsIn(t).includes(name)));
   if (names.length === 0) return;
+  const one = names.length === 1;
   logOf(deps).info(
     "api",
-    `${names.join(", ")} ${names.length === 1 ? "is" : "are"} empty on every row of the register ` +
-      "(checked 2026-10-06), so a filter on it matches nothing and a group on it is one null group.",
+    `${names.join(", ")} ${one ? "is" : "are"} empty (null) on every row of the register (checked 2026-10-06): ` +
+      `\`IS NULL\` on ${one ? "it" : "them"} matches every row, any other condition on ${one ? "it" : "them"} none, ` +
+      `and a group on ${one ? "it" : "one of them"} is one null group.`,
   );
 }
 

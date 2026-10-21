@@ -72,8 +72,9 @@ always empty), so cite `dataLastEditDate` with an answer.
 `--fields` and `count-by`. Sixteen of the listed columns are `null` on every row (the
 `evses_*` per-connector columns, `documentDate`, `documentTime`, `json_type`,
 `Steckersystem_Ladepunkt7..10`; see GLOSSARY.md): `fields` names them on stderr, and
-`stations`/`count-by` log an `INFO` record (`… is empty on every row`) when a filter, sort,
-field list or group names one, since its `0` or single `null` group is not an answer.
+`stations`/`count-by` log an `INFO` record (`… is empty (null) on every row`) when a filter,
+sort, field list or group names one (outside a string literal), since its `0`, its full count
+with `IS NULL` or its single `null` group is not an answer about that column.
 
 ## The `--where` filter
 

@@ -120,8 +120,9 @@ ladesaeulen stations --count
   Company names can carry a trailing space (`EnBW mobility+ AG und Co.KG `), so match
   with `LIKE '%…%'` rather than `=`.
 - **Don't filter on the `evses_*` columns, `documentDate` or `json_type`.** They are listed
-  by `ladesaeulen fields` but empty on every row, so a filter on them gives `0` (the CLI
-  logs an `INFO` record `… is empty on every row` on stderr); per-connector power comes from
+  by `ladesaeulen fields` but empty on every row, so a filter on them gives `0`, and
+  `IS NULL` on them every station (the CLI logs an `INFO` record `… is empty (null) on every
+  row` on stderr); per-connector power comes from
   `--min-point-kw`.
 - **Default columns are curated** — pass `--fields '*'` for everything (includes a
   large raw JSON blob per row).

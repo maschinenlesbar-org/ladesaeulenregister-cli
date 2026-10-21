@@ -341,8 +341,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **Sixteen columns are always empty** (`columns.ts`, `EMPTY_FIELDS`; one live
   `IS NOT NULL` count over all of them gave 0 on 2026-10-06): the `evses_*` per-connector
   columns, `documentDate`, `documentTime`, `json_type`, `Steckersystem_Ladepunkt7..10`.
-  `emptyFieldsIn(text)` finds them in a `where`/`orderBy`/`outFields`/group field; the CLI
-  prints a stderr note then (exit code unchanged), and `fields` names them.
+  `emptyFieldsIn(text)` finds them in a `where`/`orderBy`/`outFields`/group field (as whole
+  identifiers, outside SQL string literals); the CLI prints a stderr note then (`IS NULL` on
+  it matches every row, any other condition none; exit code unchanged), and `fields` names
+  them.
 - Coordinates are in `coordinates_latitude`/`coordinates_longitude` (and the geometry).
   `stations()` requests `returnGeometry=false` for lean JSON; `--geojson` returns full
   geometry.

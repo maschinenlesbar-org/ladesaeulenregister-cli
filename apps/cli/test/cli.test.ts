@@ -398,14 +398,38 @@ test("a filter or group on a column the register never fills gets a stderr note,
   const col = "evses_evse_connectors_connector___max_electric_power_connector";
   const cli = makeCli(() => jsonResponse(fx.countOnly));
   assert.equal(await run(["stations", "--where", `${col} >= 150`, "--count"], cli.deps), 0);
-  assert.match(untimed(cli.err.join("\n")), new RegExp(`^INFO  \\[ladesaeulen\\.api\\] ${col} is empty on every row of the register`));
+  assert.match(untimed(cli.err.join("\n")), new RegExp(`^INFO  \\[ladesaeulen\\.api\\] ${col} is empty \\(null\\) on every row of the register`));
   const grouped = makeCli(() => jsonResponse({ features: [{ attributes: { documentDate: null, count: 117584 } }] }));
   assert.equal(await run(["count-by", "documentDate"], grouped.deps), 0);
-  assert.match(untimed(grouped.err.join("\n")), /^INFO  \[ladesaeulen\.api\] documentDate is empty on every row/);
+  assert.match(untimed(grouped.err.join("\n")), /^INFO  \[ladesaeulen\.api\] documentDate is empty \(null\) on every row/);
   // Steckersystem_Ladepunkt1 is filled; it must not be mistaken for Steckersystem_Ladepunkt10.
   const quiet = makeCli(() => jsonResponse(fx.countOnly));
   assert.equal(await run(["stations", "--where", "Steckersystem_Ladepunkt1 LIKE '%DC%'", "--count"], quiet.deps), 0);
   assert.deepEqual(quiet.err, []);
+});
+
+test("the empty-column note says IS NULL matches every row, and ignores a column name inside a string literal (B01-1)", async () => {
+  // `documentDate IS NULL` counted every station (117,584) after a note that said the filter
+  // "matches nothing"; a string value that happens to be a column name got the note too.
+  const isNull = makeCli(() => jsonResponse({ count: 117584 }));
+  assert.equal(await run(["stations", "--where", "documentDate IS NULL", "--count"], isNull.deps), 0);
+  assert.deepEqual(isNull.out, ["117584"]);
+  const note = untimed(isNull.err.join("\n"));
+  assert.match(note, /^INFO  \[ladesaeulen\.api\] documentDate is empty \(null\) on every row of the register/);
+  assert.match(note, /`IS NULL` on it matches every row, any other condition on it none/);
+  assert.doesNotMatch(note, /matches nothing/);
+  const plural = makeCli(() => jsonResponse({ count: 0 }));
+  assert.equal(await run(["stations", "--where", "json_type = 'x' OR documentTime = 'y'", "--count"], plural.deps), 0);
+  assert.match(untimed(plural.err.join("\n")), /documentTime, json_type are empty \(null\) on every row .*`IS NULL` on them matches every row, any other condition on them none/);
+  for (const where of ["Ort='json_type'", "Ort = 'it''s json_type'", "Betreiber LIKE '%documentDate%'"]) {
+    const literal = makeCli(() => jsonResponse({ count: 1 }));
+    assert.equal(await run(["stations", "--where", where, "--count"], literal.deps), 0, where);
+    assert.deepEqual(literal.err, [], where);
+  }
+  // A column after a literal is still found.
+  const after = makeCli(() => jsonResponse({ count: 1 }));
+  assert.equal(await run(["stations", "--where", "Ort='x' AND json_type IS NULL", "--count"], after.deps), 0);
+  assert.match(untimed(after.err.join("\n")), /json_type is empty/);
 });
 
 test("fields notes the columns that are empty on every row", async () => {
