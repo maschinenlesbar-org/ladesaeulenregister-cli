@@ -264,11 +264,16 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `count()` a non-negative integer `count`, `fields()` a `fields` array, and `geojson()`
   a `FeatureCollection` with a `features` array of objects. `null`, `{}`, a string or
   an HTML page is a `LadesaeulenParseError` (exit 1), never data or an empty map.
+  Every error about an answer names the request, as a network error does:
+  `GET <url>: unexpected response shape: expected a features array.`, `GET <url>: the answer
+  is not valid JSON (expected JSON, got Content-Type "text/html").`, `GET <url>: unsupported
+  response charset "x".` (`describeRequest`: the method actually used, `POST` and the bare
+  URL for a long query, userinfo redacted, cut at 500 characters).
   So is a number `JSON.parse` can't carry exactly (`firstInexactNumber` in `getJson`): out
   of a double's range (`1e400`), past 2^53 in any written form (`12345678901234567890`,
   `9007199254740993e0`, `9007199254740992.5`), non-zero and too small (`1e-400`), or a
   subnormal that does not print as written (`3e-324` would become `5e-324`) —
-  `Unexpected response from /0/query: the number <N> cannot be represented exactly.` Past
+  `GET <url>: the number <N> cannot be represented exactly.` Past
   2^53 and below the smallest normal double (2.2250738585072014e-308) the check compares the number as written with the number as printed
   (`String(value)`, `decimalOf`), not with the double's exact binary value:
   `12345678901234567890` prints as `12345678901234567000` and is refused, while `1E23` or

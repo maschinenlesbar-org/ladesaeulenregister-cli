@@ -90,19 +90,22 @@ function groupField(field: string): string {
  * matches it case-insensitively. A row without it is a malformed reply, not a
  * `null` group (the register has real `null` groups, e.g. `Betreiber`).
  */
-function groupValue(attributes: Record<string, unknown>, field: string, path: string, i: number): unknown {
+function groupValue(attributes: Record<string, unknown>, field: string, request: string, i: number): unknown {
   if (Object.prototype.hasOwnProperty.call(attributes, field)) return attributes[field];
   const lower = field.toLowerCase();
   const keys = Object.keys(attributes).filter((k) => k.toLowerCase() === lower);
   if (keys.length === 1) return attributes[keys[0]!];
   throw new LadesaeulenParseError(
-    `Unexpected response shape from ${path}: expected the group-by field ${show(field)} in every group, group ${i} has none.`,
+    `${request}: unexpected response shape: expected the group-by field ${show(field)} in every group, group ${i} has none.`,
   );
 }
 
-/** The error for a reply whose top-level shape is not what the client relies on. */
-function shapeError(path: string, expected: string): LadesaeulenParseError {
-  return new LadesaeulenParseError(`Unexpected response shape from ${path}: expected ${expected}.`);
+/**
+ * The error for a reply whose shape is not what the client relies on, naming the request
+ * (`<METHOD> <url>`, `RequestEngine.describeRequest`).
+ */
+function shapeError(request: string, expected: string): LadesaeulenParseError {
+  return new LadesaeulenParseError(`${request}: unexpected response shape: expected ${expected}.`);
 }
 
 /** A short description of a JSON value for a shape error ("null", "a string", …). */
@@ -123,14 +126,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
  * JSON object with an `attributes` object. Anything else is a malformed reply —
  * library users are typed against `Feature[]` and the CLI reads `attributes`.
  */
-function featureList(features: unknown, path: string): Feature[] {
-  if (!Array.isArray(features)) throw shapeError(path, "a features array");
+function featureList(features: unknown, request: string): Feature[] {
+  if (!Array.isArray(features)) throw shapeError(request, "a features array");
   features.forEach((f: unknown, i) => {
     if (!isObject(f)) {
-      throw shapeError(path, `every feature to be a JSON object with an attributes object, feature ${i} is ${kindOf(f)}`);
+      throw shapeError(request, `every feature to be a JSON object with an attributes object, feature ${i} is ${kindOf(f)}`);
     }
     if (!isObject(f["attributes"])) {
-      throw shapeError(path, `every feature to be a JSON object with an attributes object, feature ${i} has none`);
+      throw shapeError(request, `every feature to be a JSON object with an attributes object, feature ${i} has none`);
     }
   });
   return features as Feature[];
@@ -294,12 +297,16 @@ export class LadesaeulenClient {
     this.engine = new RequestEngine(options);
   }
 
-  /** Request a query path, then throw if the ArcGIS `error` envelope is present. */
+  /**
+   * Request a query path, then throw if the ArcGIS `error` envelope is present. Returns the
+   * answer and the request as its errors name it (`describeRequest`).
+   */
   private async get<T extends { error?: { code?: number; message?: string; details?: string[] } }>(
     path: string,
     params: QueryParams,
-  ): Promise<T> {
+  ): Promise<{ res: T; request: string }> {
     const res = await this.engine.getJson<T>(path, params);
+    const request = this.engine.describeRequest(path, params);
     // Every query/metadata endpoint answers with a JSON envelope object. A null
     // (empty/204 body) or non-object reply means the endpoint did not return the
     // expected shape; surface it as a typed parse error rather than letting a
@@ -307,7 +314,7 @@ export class LadesaeulenClient {
     // is reported as an "Unexpected error".
     if (res === null || typeof res !== "object" || Array.isArray(res)) {
       const got = res === null ? "an empty body" : Array.isArray(res) ? "an array" : typeof res;
-      throw shapeError(path, `a JSON object, got ${got}`);
+      throw shapeError(request, `a JSON object, got ${got}`);
     }
     // Any present, truthy `error` is a failure — ArcGIS writes it as an object,
     // but a gateway or an older server may send a bare string ("Token Required")
@@ -320,7 +327,7 @@ export class LadesaeulenClient {
       // terminal escapes) and the base URL's credentials, and redacts the URL.
       throw this.engine.envelopeError(path, params, res, err);
     }
-    return res;
+    return { res, request };
   }
 
   /** Build the shared feature-query params (where / outFields / paging / near). */
@@ -354,9 +361,9 @@ export class LadesaeulenClient {
       { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
       { f: "json", returnGeometry: false },
     );
-    const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
+    const { res, request } = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
     return {
-      features: withChargePointPower(featureList(res.features, `${LAYER}/query`), q.minChargePointKw),
+      features: withChargePointPower(featureList(res.features, request), q.minChargePointKw),
       exceededTransferLimit: res.exceededTransferLimit === true,
     };
   }
@@ -372,12 +379,12 @@ export class LadesaeulenClient {
     assertValid("count query", q, countQueryProblem);
     if (q.minChargePointKw !== undefined) return this.countByChargePointPower(q, q.minChargePointKw);
     const params = this.buildParams(q, { f: "json", returnCountOnly: true });
-    const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
+    const { res, request } = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
     // 0 is a plausible real answer, so a reply without a usable count must not
     // become one (a proxy's `{}`, a non-ArcGIS endpoint, a string count).
     const count: unknown = res.count;
     if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
-      throw shapeError(`${LAYER}/query`, "a non-negative integer count");
+      throw shapeError(request, "a non-negative integer count");
     }
     return count;
   }
@@ -403,8 +410,8 @@ export class LadesaeulenClient {
         },
         { f: "json", returnGeometry: false },
       );
-      const res = await this.get<ArcGisQueryResponse>(path, params);
-      const features = featureList(res.features, path);
+      const { res, request } = await this.get<ArcGisQueryResponse>(path, params);
+      const features = featureList(res.features, request);
       total += withChargePointPower(features, minKw).length;
       if (res.exceededTransferLimit !== true || features.length === 0) return total;
       offset += features.length;
@@ -426,20 +433,18 @@ export class LadesaeulenClient {
       { ...q, outFields: q.outFields ?? DEFAULT_FIELDS, limit: q.limit ?? DEFAULT_LIMIT },
       { f: "geojson" },
     );
-    const path = `${LAYER}/query`;
-    const res = (await this.get<{ error?: { code?: number; message?: string; details?: string[] } }>(
-      path,
-      params,
-    )) as Record<string, unknown>;
+    const answer = await this.get<{ error?: { code?: number; message?: string; details?: string[] } }>(`${LAYER}/query`, params);
+    const res = answer.res as Record<string, unknown>;
+    const request = answer.request;
     const type = res["type"];
     if (type !== "FeatureCollection") {
       const got = typeof type === "string" ? JSON.stringify(type) : kindOf(type);
-      throw shapeError(path, `a GeoJSON FeatureCollection, got type ${got}`);
+      throw shapeError(request, `a GeoJSON FeatureCollection, got type ${got}`);
     }
     const features: unknown = res["features"];
-    if (!Array.isArray(features)) throw shapeError(path, `a FeatureCollection with a features array, got ${kindOf(features)}`);
+    if (!Array.isArray(features)) throw shapeError(request, `a FeatureCollection with a features array, got ${kindOf(features)}`);
     features.forEach((f: unknown, i) => {
-      if (!isObject(f)) throw shapeError(path, `every feature to be a JSON object, feature ${i} is ${kindOf(f)}`);
+      if (!isObject(f)) throw shapeError(request, `every feature to be a JSON object, feature ${i} is ${kindOf(f)}`);
     });
     const collection = res as unknown as GeoJsonFeatureCollection;
     // GeoJSON carries the columns in `properties`; derive and filter the same way.
@@ -480,14 +485,13 @@ export class LadesaeulenClient {
       ]),
       orderByFields: "count DESC",
     };
-    const res = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
-    const path = `${LAYER}/query`;
-    const groups = featureList(res.features, path).map((f, i) => {
+    const { res, request } = await this.get<ArcGisQueryResponse>(`${LAYER}/query`, params);
+    const groups = featureList(res.features, request).map((f, i) => {
       const count: unknown = f.attributes["count"];
       if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
-        throw shapeError(path, `a non-negative integer count in every group, group ${i} has ${kindOf(count)}`);
+        throw shapeError(request, `a non-negative integer count in every group, group ${i} has ${kindOf(count)}`);
       }
-      return { value: (groupValue(f.attributes, name, path, i) as string | number | null) ?? null, count };
+      return { value: (groupValue(f.attributes, name, request, i) as string | number | null) ?? null, count };
     });
     return { groups, exceededTransferLimit: res.exceededTransferLimit === true };
   }
@@ -518,16 +522,16 @@ export class LadesaeulenClient {
 
   /** The layer document (`/0?f=json`), checked: an object with a `fields` array of named fields. */
   private async layer(): Promise<{ doc: Record<string, unknown>; fields: FieldInfo[] }> {
-    const res = await this.get<{ fields?: FieldInfo[]; error?: { code?: number; message?: string } }>(
+    const { res, request } = await this.get<{ fields?: FieldInfo[]; error?: { code?: number; message?: string } }>(
       LAYER,
       { f: "json" },
     );
     const fields: unknown = res.fields;
-    if (!Array.isArray(fields)) throw shapeError(LAYER, "a fields array");
+    if (!Array.isArray(fields)) throw shapeError(request, "a fields array");
     fields.forEach((f: unknown, i) => {
       if (!isObject(f) || typeof f["name"] !== "string") {
         const what = isObject(f) ? "has no string name" : `is ${kindOf(f)}`;
-        throw shapeError(LAYER, `every field to be a JSON object with a string name, field ${i} ${what}`);
+        throw shapeError(request, `every field to be a JSON object with a string name, field ${i} ${what}`);
       }
     });
     return { doc: res as Record<string, unknown>, fields: fields as FieldInfo[] };

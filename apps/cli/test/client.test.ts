@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { inspect } from "node:util";
 import type { HttpRequest, HttpResponse } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/http";
 import { LadesaeulenClient, DEFAULT_FIELDS } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/client";
+import { DEFAULT_BASE_URL } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/engine";
 import {
   LadesaeulenApiError,
   LadesaeulenParseError,
@@ -10,6 +11,14 @@ import {
 } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/errors";
 import { makeMockTransport, jsonResponse, rawResponse, queryOf } from "./helpers.js";
 import * as fx from "@maschinenlesbar.org/ladesaeulenregister-client/test/fixtures";
+
+/**
+ * Whether `message` is the shape error for a GET to `path` (D9: it names the request, method and
+ * URL) ending in `tail`.
+ */
+function isShapeError(message: string, path: string, tail: string): boolean {
+  return message.startsWith(`GET ${DEFAULT_BASE_URL}${path}`) && message.endsWith(`: unexpected response shape: ${tail}`);
+}
 
 function clientFor(body: unknown) {
   const mt = makeMockTransport(() => jsonResponse(body));
@@ -114,7 +123,7 @@ test("an empty 200 body surfaces as a typed LadesaeulenParseError, not a raw Typ
     () => client.stations(),
     (err) =>
       err instanceof LadesaeulenParseError &&
-      err.message === "Unexpected response shape from /0/query: expected a JSON object, got an empty body.",
+      isShapeError(err.message, "/0/query", "expected a JSON object, got an empty body."),
   );
 });
 
@@ -142,7 +151,7 @@ test("countBy() throws LadesaeulenParseError when features is not an array", asy
     () => client.countBy("state"),
     (err) =>
       err instanceof LadesaeulenParseError &&
-      err.message === "Unexpected response shape from /0/query: expected a features array.",
+      isShapeError(err.message, "/0/query", "expected a features array."),
   );
 });
 
@@ -150,7 +159,7 @@ test("fields() throws LadesaeulenParseError when fields is not an array", async 
   const { client } = clientFor({ fields: { message: "unexpected shape" } });
   await assert.rejects(
     () => client.fields(),
-    (err) => err instanceof LadesaeulenParseError && err.message === "Unexpected response shape from /0: expected a fields array.",
+    (err) => err instanceof LadesaeulenParseError && isShapeError(err.message, "/0", "expected a fields array."),
   );
 });
 
@@ -197,7 +206,7 @@ test("countBy() refuses a field list with a validation error and sends nothing",
 
 test("countBy() refuses a field name that is no single column name (a line break, a space, a bracket) and sends nothing", async () => {
   // The live server answered a group-by field with a line break with something that was not
-  // JSON ("Failed to parse JSON response from /0/query", 2026-10-09 result 05 B05-1).
+  // JSON ("the answer is not valid JSON", 2026-10-09 result 05 B05-1).
   for (const field of ["Ort\nx", "Ort x", "Ort)", "UPPER(Ort)", "Ort;--", "\"Ort\""]) {
     const { client, mt } = clientFor(fx.countByState);
     await assert.rejects(
@@ -223,7 +232,7 @@ test("countBy() reads a group value echoed in another case, and rejects a group 
     () => missing.client.countBy("state"),
     (err) =>
       err instanceof LadesaeulenParseError &&
-      err.message === 'Unexpected response shape from /0/query: expected the group-by field "state" in every group, group 0 has none.',
+      isShapeError(err.message, "/0/query", 'expected the group-by field "state" in every group, group 0 has none.'),
   );
   // A real null group stays a null value.
   const nullGroup = clientFor({ features: [{ attributes: { Betreiber: null, count: 5 } }] });
@@ -237,7 +246,7 @@ test("count() rejects a reply without a non-negative integer count", async () =>
       () => client.count(),
       (err) =>
         err instanceof LadesaeulenParseError &&
-        err.message === "Unexpected response shape from /0/query: expected a non-negative integer count.",
+        isShapeError(err.message, "/0/query", "expected a non-negative integer count."),
       JSON.stringify(body),
     );
   }
@@ -268,7 +277,7 @@ test("a JSON array body is a parse error, not an empty page", async () => {
     () => client.stations(),
     (err) =>
       err instanceof LadesaeulenParseError &&
-      err.message === "Unexpected response shape from /0/query: expected a JSON object, got an array.",
+      isShapeError(err.message, "/0/query", "expected a JSON object, got an array."),
   );
 });
 
@@ -286,7 +295,8 @@ test("stations() rejects a reply whose features are missing, not an array, or no
       () => client.stations(),
       (err) =>
         err instanceof LadesaeulenParseError &&
-        err.message.startsWith("Unexpected response shape from /0/query: expected ") &&
+        err.message.startsWith(`GET ${DEFAULT_BASE_URL}/0/query?`) &&
+        err.message.includes(": unexpected response shape: expected ") &&
         err.message.endsWith(tail),
       JSON.stringify(body),
     );

@@ -575,6 +575,18 @@ export class RequestEngine {
   }
 
   /**
+   * The request as an answer error names it: `<METHOD> <url>` of the request the engine sends
+   * for `path` + `query` (a GET, or the form POST of a long query, whose URL is the bare path),
+   * userinfo redacted and cut at MAX_MESSAGE_VALUE_LENGTH characters. Every error about an
+   * answer (bad JSON, an unknown charset, an inexact number, the wrong shape) starts with it,
+   * as a network error does, so a caller making several requests can tell which one it was.
+   */
+  describeRequest(path: string, query?: QueryParams): string {
+    const target = this.requestTarget(path, query);
+    return `${target.method} ${cutForMessage(redactUrl(target.url))}`;
+  }
+
+  /**
    * Call the transport under the overall deadline (`timeoutMs`): the request gets an
    * AbortSignal that fires at the deadline, and the call rejects then whether the transport
    * stops or not — a custom transport (fetch, a node:http wrapper) that ignores `timeoutMs`
@@ -742,7 +754,8 @@ export class RequestEngine {
    */
   async getJson<T>(path: string, query?: QueryParams): Promise<T> {
     const res = await this.request(path, query);
-    const text = decodeBody(res.data, res.contentType, path);
+    const request = this.describeRequest(path, query);
+    const text = decodeBody(res.data, res.contentType, request);
     if (res.status === 204 || text.trim().length === 0) {
       return null as T;
     }
@@ -752,14 +765,16 @@ export class RequestEngine {
     try {
       parsed = JSON.parse(json) as T;
     } catch (cause) {
-      throw new LadesaeulenParseError(`Failed to parse JSON response from ${path}`, { cause });
+      // An HTML maintenance or proxy page is the usual non-JSON answer: name its type,
+      // so it reads as an upstream problem rather than a client bug.
+      const type = res.contentType.split(";")[0]?.trim() ?? "";
+      const hint = type !== "" && !/json/i.test(type) ? ` (expected JSON, got Content-Type "${cutForMessage(sanitizeServerText(type))}")` : "";
+      throw new LadesaeulenParseError(`${request}: the answer is not valid JSON${hint}.`, { cause });
     }
     // JSON.parse rounds and overflows numbers silently: refuse the answer rather than hand
     // on a changed value.
     if (inexact !== undefined) {
-      throw new LadesaeulenParseError(
-        `Unexpected response from ${path}: the number ${cutForMessage(inexact)} cannot be represented exactly.`,
-      );
+      throw new LadesaeulenParseError(`${request}: the number ${cutForMessage(inexact)} cannot be represented exactly.`);
     }
     return parsed;
   }
@@ -814,15 +829,16 @@ export class RequestEngine {
  * none). TextDecoder drops a leading byte order mark, which Buffer#toString keeps and
  * JSON.parse then rejects, so a BOM added by a proxy or a backend change cannot turn a
  * valid answer into a parse error, and a Latin-1 body keeps its umlauts ("München").
- * An unknown charset label is a LadesaeulenParseError.
+ * An unknown charset label is a LadesaeulenParseError naming `request` (`<METHOD> <url>`,
+ * as `RequestEngine.describeRequest` gives it).
  */
-export function decodeBody(body: Buffer, contentType: string, path: string): string {
+export function decodeBody(body: Buffer, contentType: string, request: string): string {
   const charset = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1] ?? "utf-8";
   let decoder: TextDecoder;
   try {
     decoder = new TextDecoder(charset);
   } catch {
-    throw new LadesaeulenParseError(`Unsupported response charset "${cutForMessage(sanitizeServerText(charset))}" from ${path}.`);
+    throw new LadesaeulenParseError(`${request}: unsupported response charset "${cutForMessage(sanitizeServerText(charset))}".`);
   }
   return decoder.decode(body);
 }

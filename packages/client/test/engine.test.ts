@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   RequestEngine,
   MAX_GET_URL_LENGTH,
+  DEFAULT_BASE_URL,
   bigIntegerKeysOption,
   cleartextProblem,
   firstInexactNumber,
@@ -71,7 +72,7 @@ test("a number JSON.parse can't carry exactly is a LadesaeulenParseError, never 
     const e = new RequestEngine({ transport: mt.transport });
     await assert.rejects(() => e.getJson("/0/query"), (err: unknown) => {
       assert.ok(err instanceof LadesaeulenParseError, literal);
-      assert.equal(err.message, `Unexpected response from /0/query: the number ${literal} cannot be represented exactly.`);
+      assert.equal(err.message, `GET ${DEFAULT_BASE_URL}/0/query: the number ${literal} cannot be represented exactly.`);
       return true;
     });
   }
@@ -671,4 +672,34 @@ test("bigIntegerKeys: a declared member's number is its exact literal as a strin
   // Without declarations the scan is the plain number check.
   assert.equal(firstInexactNumber('{"a":"1e400","b":3e-324}'), "3e-324");
   assert.deepEqual(scanNumbers('{"a":1}'), { json: '{"a":1}', inexact: undefined });
+});
+
+test("an answer error names the request: method and URL, userinfo redacted (D9)", async () => {
+  const answers: Array<[string, () => ReturnType<typeof rawResponse>]> = [
+    ["the answer is not valid JSON (expected JSON, got Content-Type \"text/html\")", () => rawResponse("<html>", "text/html")],
+    ["the answer is not valid JSON.", () => rawResponse("{", "application/json")],
+    ["cannot be represented exactly", () => rawResponse('{"n":1e400}', "application/json")],
+    ["unsupported response charset", () => rawResponse("{}", "application/json; charset=x-bogus")],
+  ];
+  const base = new URL("https://example.test/FeatureServer");
+  base.username = "alice";
+  base.password = "s3cret";
+  for (const [what, respond] of answers) {
+    const e = new RequestEngine({ baseUrl: base.href, transport: makeMockTransport(respond).transport });
+    await assert.rejects(e.getJson("/0/query", { where: "1=1" }), (err: unknown) => {
+      assert.ok(err instanceof LadesaeulenParseError, what);
+      assert.ok(err.message.startsWith("GET https://***@example.test/FeatureServer/0/query?where=1%3D1: "), err.message);
+      assert.ok(err.message.includes(what), err.message);
+      assert.ok(!err.message.includes("s3cret"), err.message);
+      return true;
+    });
+  }
+  // A long query goes out as a form POST: its errors name POST and the bare URL.
+  const long = { where: `Postleitzahl IN (${Array.from({ length: 400 }, (_, i) => `'${10000 + i}'`).join(",")})` };
+  const post = new RequestEngine({ baseUrl: base.href, transport: makeMockTransport(() => rawResponse("<html>", "text/html")).transport });
+  await assert.rejects(post.getJson("/0/query", long), (err: Error) => err.message.startsWith("POST https://***@example.test/FeatureServer/0/query: the answer is not valid JSON"));
+  // A shape error from the client names the request too.
+  const client = new LadesaeulenClient({ baseUrl: base.href, transport: makeMockTransport(() => rawResponse('{"features":"x"}', "application/json")).transport });
+  await assert.rejects(client.stations(), (err: Error) =>
+    err instanceof LadesaeulenParseError && /^GET https:\/\/\*\*\*@example\.test\/FeatureServer\/0\/query\?\S+: unexpected response shape: expected a features array\.$/.test(err.message));
 });
