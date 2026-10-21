@@ -265,7 +265,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   how many (`GET <url>: 2 characters of the answer were not valid text (invalid bytes or a
   lone surrogate) and replaced with U+FFFD.`); the CLI's `action()` logs it as a `WARN`
   record of `ladesaeulen.api`. One bad character never sinks a whole answer, and the
-  printed JSON stays readable for `jq`.
+  printed JSON stays readable for `jq`. A body too large to be one string (512 MB and
+  more, possible with `maxResponseBytes: 0`) is a `LadesaeulenParseError` too: `GET <url>:
+  the answer is too large to read as text (N bytes; the longest string is 536870888
+  characters).` (V8's `ERR_STRING_TOO_LONG` used to escape as a plain Error, "Unexpected
+  error"); an error status with such a body keeps its `LadesaeulenApiError`, without the body.
 - **Every 2xx reply is checked against its documented shape** before it reaches a
   caller: `stations()`/`countBy()` need a `features` array of objects with `attributes`,
   `count()` a non-negative integer `count`, `fields()` a `fields` array, and `geojson()`
