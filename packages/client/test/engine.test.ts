@@ -212,6 +212,52 @@ test("a refused connection, a DNS failure and a timeout are not retried", async 
   }
 });
 
+test("a timeout, the size cap, a refused connection and a DNS failure name the request; the original is the cause", async () => {
+  const base = "https://user:s3cret@example.test/FeatureServer";
+  const named = "GET https://***@example.test/FeatureServer/0/query?f=json failed: ";
+  const thrown: Array<[LadesaeulenNetworkError, string]> = [
+    [new LadesaeulenNetworkError("Request timed out after 30000ms"), "Request timed out after 30000ms"],
+    [new LadesaeulenNetworkError("connect ECONNREFUSED 127.0.0.1:1"), "connect ECONNREFUSED 127.0.0.1:1"],
+    [new LadesaeulenNetworkError("getaddrinfo ENOTFOUND example.invalid"), "getaddrinfo ENOTFOUND example.invalid"],
+    [
+      new LadesaeulenNetworkError("Response exceeded the size limit of 5 bytes (maxResponseBytes; --max-response-bytes on the CLI)"),
+      "Response exceeded the size limit of 5 bytes (maxResponseBytes; --max-response-bytes on the CLI)",
+    ],
+  ];
+  for (const [original, reason] of thrown) {
+    const mt = makeMockTransport(() => {
+      throw original;
+    });
+    const e = new RequestEngine({ baseUrl: base, transport: mt.transport, maxRetries: 0 });
+    await assert.rejects(
+      () => e.getJson("/0/query", { f: "json" }),
+      (err: unknown) => {
+        assert.ok(err instanceof LadesaeulenNetworkError);
+        assert.equal(err.message, `${named}${reason}`);
+        assert.equal(err.cause, original);
+        return true;
+      },
+    );
+  }
+  // The engine's own deadline and its own size check.
+  const hang = new RequestEngine({ baseUrl: base, transport: () => new Promise(() => {}), timeoutMs: 5 });
+  await assert.rejects(() => hang.getJson("/0/query", { f: "json" }), (err: unknown) => {
+    assert.ok(err instanceof LadesaeulenNetworkError);
+    assert.equal(err.message, `${named}Request timed out after 5ms`);
+    return true;
+  });
+  const big = makeMockTransport(() => rawResponse("{\"count\":1234567}", "application/json"));
+  const capped = new RequestEngine({ baseUrl: base, transport: big.transport, maxResponseBytes: 5 });
+  await assert.rejects(() => capped.getJson("/0/query", { f: "json" }), (err: unknown) => {
+    assert.ok(err instanceof LadesaeulenNetworkError);
+    assert.equal(
+      err.message,
+      `${named}Response exceeded the size limit of 5 bytes (maxResponseBytes; --max-response-bytes on the CLI)`,
+    );
+    return true;
+  });
+});
+
 test("a long-query form POST is not re-sent after a reset (a 503 still is)", async () => {
   const where = `Ort IN ('Berlin'${Array.from({ length: 200 }, (_, i) => `,'X${String(i).padStart(4, "0")}'`).join("")})`;
   let calls = 0;

@@ -135,7 +135,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   re-sent after a reset (a 503 to it still is). A reset that persists surfaces as a
   `LadesaeulenNetworkError` ending `(after N retries)`. Other network errors (a refused
   connection, DNS, a timeout) are not retried; they surface at once as
-  `LadesaeulenNetworkError` (exit 6).
+  `LadesaeulenNetworkError` (exit 6). Every network error names the request it broke:
+  `GET <url> failed: connect ECONNREFUSED 127.0.0.1:1`, `… failed: Request timed out after
+  500ms`, `… failed: Response exceeded the size limit of …` (userinfo redacted, the
+  transport's original error as `cause`), so a script or library user making several calls
+  can tell which one failed.
   Each retry is announced: the engine option `onRetry(event: RetryEvent)` (exported type:
   `{ retry` (1-based), `maxRetries`, `delayMs`, `status?` (absent for a reset), `url` (userinfo
   masked) `}`) is called once per retry right before the sleep, never when there is none, and
@@ -148,8 +152,8 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   overall `timeoutMs` deadline (the request carries an `AbortSignal`,
   `HttpRequest.signal`, that fires then, and the call rejects at the deadline whether
   the transport stops or not); `maxResponseBytes` is checked on the body it returns
-  (`Response exceeded the size limit of N bytes (maxResponseBytes; --max-response-bytes
-  on the CLI)`); headers may come as a plain record in any case, a `Headers` object or
+  (`GET <url> failed: Response exceeded the size limit of N bytes (maxResponseBytes;
+  --max-response-bytes on the CLI)`); headers may come as a plain record in any case, a `Headers` object or
   a `Map`; the body may be a `Buffer`, any `ArrayBuffer` view or an `ArrayBuffer` (from
   any realm). Whatever else a transport throws or returns — a plain `Error`, a string,
   `null`, a response without a valid status — becomes a `LadesaeulenNetworkError`
