@@ -11,7 +11,7 @@
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
 import { RequestEngine, type EngineOptions } from "./engine.js";
-import { LadesaeulenParseError, LadesaeulenValidationError, cutForMessage } from "./errors.js";
+import { LadesaeulenParseError, LadesaeulenValidationError, cutForMessage, quoteValue } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import { assertValid, countQueryProblem } from "./validate.js";
 import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw } from "./power.js";
@@ -191,9 +191,9 @@ export const MAX_LIMIT = 10_000;
  */
 export const DEFAULT_LIMIT = 50;
 
-/** A value as it appears in a validation message: strings quoted, the rest as is. */
+/** A value as it appears in a message: strings quoted visibly (`quoteValue`), the rest as is. */
 function show(value: unknown): string {
-  return typeof value === "string" ? JSON.stringify(cutForMessage(value)) : cutForMessage(String(value));
+  return typeof value === "string" ? quoteValue(value) : cutForMessage(String(value));
 }
 
 function invalid(name: string, expected: string, value: unknown): LadesaeulenValidationError {
@@ -438,7 +438,7 @@ export class LadesaeulenClient {
     const request = answer.request;
     const type = res["type"];
     if (type !== "FeatureCollection") {
-      const got = typeof type === "string" ? JSON.stringify(type) : kindOf(type);
+      const got = typeof type === "string" ? quoteValue(type) : kindOf(type);
       throw shapeError(request, `a GeoJSON FeatureCollection, got type ${got}`);
     }
     const features: unknown = res["features"];

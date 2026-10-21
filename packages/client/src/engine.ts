@@ -34,6 +34,9 @@ import {
 
 export const DEFAULT_BASE_URL =
   "https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeulen/FeatureServer";
+// quoteValue lives with the other message helpers (validate.ts quotes refused values with it).
+export { quoteValue } from "./errors.js";
+
 const DEFAULT_USER_AGENT = "ladesaeulenregister-cli";
 /** V8's longest string (2^29 − 24 characters on 64-bit). */
 const MAX_STRING_LENGTH = constants.MAX_STRING_LENGTH;

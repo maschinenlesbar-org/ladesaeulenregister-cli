@@ -76,3 +76,20 @@ test("parity() drives the same input through run() and the library on one transp
   assert.deepEqual(res.value, fields.fields);
   assert.deepEqual(requestShapes(cli.requests), requestShapes(res.requests));
 });
+
+test("a refused value shows its invisible and control characters escaped, never raw (D10)", async () => {
+  // A zero-width space, a bidi override and a soft hyphen in a group field: the refusal used to
+  // print them raw, so the quoted value looked like a valid column name.
+  for (const [field, escape] of [["Ort​", "\\u200b"], ["Ort‮", "\\u202e"], ["Stra­ße", "\\u00ad"]] as const) {
+    const o = await parity(["count-by", field], (t) => new LadesaeulenClient({ transport: t }).countBy(field));
+    assert.equal(o.cli.code, 2, field);
+    assert.ok(o.cli.err.includes(escape) && !o.cli.err.includes(field), `${JSON.stringify(field)}: ${o.cli.err}`);
+    assert.equal(o.lib.ok, false);
+    const message = (o.lib as { error: Error }).error.message;
+    assert.ok(message.includes(escape) && !message.includes(field), message);
+  }
+  // A long value is cut at 500 characters, the "…" after the closing quote.
+  const long = `${"x".repeat(600)} y`;
+  await assert.rejects(new LadesaeulenClient({ transport: makeMockTransport(() => jsonResponse({})).transport }).countBy(long), (err: Error) =>
+    err.message.includes(`"${"x".repeat(500)}"…`));
+});

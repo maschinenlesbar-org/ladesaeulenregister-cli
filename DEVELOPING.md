@@ -230,7 +230,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `url` and `body` keep the full value. Every other value an own message quotes from
   a server answer or the caller's input (a charset, a field or key name, a header
   name, a rejected value) is cut at `MAX_MESSAGE_VALUE_LENGTH` too, so `err.message`
-  stays bounded for a library caller. `apps/cli/test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
+  stays bounded for a library caller. A refused value is quoted visibly (`quoteValue`,
+  `errors.ts`): as `JSON.stringify` does, plus DEL, C1, U+2028/2029 and every format
+  character (a zero-width space, a soft hyphen, a bidi override) written as `\uXXXX`, so a
+  refusal of `"Ort\u200b"` never looks like one of `"Ort"`. `apps/cli/test/conformance-p8-p9-p13-responses-and-errors.test.ts` checks the
   charset, the 2xx shapes and fifteen wrong-typed calls.
   The library owns these rules; the CLI calls the same functions and only turns
   their error into a usage error. `validate.ts` holds the shared pieces: the
