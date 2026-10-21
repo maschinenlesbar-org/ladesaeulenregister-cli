@@ -236,6 +236,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   (`forbidRepeatedOptions` in `shared.ts`): commander kept the last `--where` silently.
   `apps/cli/test/conformance-p10-strict-filters.test.ts` checks unknown keys, wrong-typed values
   and repeated options.
+- **An option given as `undefined` means its default**, as an omitted one does: every
+  optional field of `EngineOptions` (= `LadesaeulenClientOptions`) and `StationQuery` is
+  declared `?: T | undefined`, so a consumer compiled with `exactOptionalPropertyTypes` can
+  write `{ baseUrl: process.env.X }`. `packages/client/test/types.test.ts` compiles such a
+  consumer with `tsc` and checks the runtime side.
 - **The library owns the request defaults.** `stations()`/`geojson()` send `where=1=1`,
   `outFields=DEFAULT_FIELDS` and `resultRecordCount=DEFAULT_LIMIT` (50) when the query
   leaves them out; without a page size the server would send its cap of about 2000
@@ -295,7 +300,7 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 ## Testing
 
 `node --test` on each workspace's `dist/test/`. The client's tests are in
-`packages/client/test/` (`query`, `http`, `engine`), with the transport helpers and the
+`packages/client/test/` (`query`, `http`, `engine`, `types`), with the transport helpers and the
 fixtures (`helpers.ts`, `fixtures.ts`); everything that drives the CLI is in `apps/cli/test/`,
 `client.test.ts` too (one of its tests runs the CLI), and `apps/cli/test/helpers.ts`
 re-exports the client's helpers next to the CLI's own.

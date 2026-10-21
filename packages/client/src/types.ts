@@ -152,20 +152,20 @@ export interface CountByPage {
 /** Query options for a station search. */
 export interface StationQuery {
   /** SQL `where` filter (default `1=1`). */
-  where?: string;
+  where?: string | undefined;
   /** Comma-separated field list, or `*`. Defaults to a curated set. */
-  outFields?: string;
+  outFields?: string | undefined;
   /**
    * Max rows to return (ArcGIS `resultRecordCount`), 1..`MAX_LIMIT`. `stations` and
    * `geojson` default to `DEFAULT_LIMIT` (50); the server sends at most ~2000.
    */
-  limit?: number;
+  limit?: number | undefined;
   /** Rows to skip (ArcGIS `resultOffset`). */
-  offset?: number;
+  offset?: number | undefined;
   /** Sort spec, e.g. `"Ort ASC"` (ArcGIS `orderByFields`). */
-  orderBy?: string;
+  orderBy?: string | undefined;
   /** Spatial filter: only stations within `radiusKm` of this point. */
-  near?: { lat: number; lon: number; radiusKm: number };
+  near?: { lat: number; lon: number; radiusKm: number } | undefined;
   /**
    * Only stations where one charge point can deliver at least this many kW
    * (`max_charge_point_kw >= minChargePointKw`; above 0, at most `MAX_CHARGE_POINT_KW`).
@@ -175,5 +175,5 @@ export interface StationQuery {
    * `outFields`. `limit`/`offset` page the server's rows, so a page can hold fewer rows
    * than `limit`; `count()` reads every candidate, 2,000 per request.
    */
-  minChargePointKw?: number;
+  minChargePointKw?: number | undefined;
 }
