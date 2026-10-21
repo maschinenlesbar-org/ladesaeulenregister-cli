@@ -5,6 +5,7 @@
 import { CommanderError, type Command } from "commander";
 import { buildProgram, defaultDeps } from "./program.js";
 import { logOf, type CliDeps } from "./io.js";
+import { OutputError } from "./output.js";
 import { DEFAULT_LOG_FORMAT, createLogger, logFormatFromArgv, type LogFormat, type Logger } from "./log.js";
 import {
   LadesaeulenApiError,
@@ -263,6 +264,10 @@ export async function run(argv: string[], deps: CliDeps = defaultDeps): Promise<
         );
       }
       return EXIT.NETWORK;
+    }
+    if (err instanceof OutputError) {
+      log.error("output", err.message);
+      return EXIT.OTHER;
     }
     if (err instanceof LadesaeulenError) {
       // A malformed answer (bad JSON, the wrong shape, an empty body, an unknown charset)

@@ -18,8 +18,8 @@ import {
   parseNonEmpty,
   parsePointKw,
   parseRadiusKm,
-  renderJson,
 } from "../shared.js";
+import { renderJson } from "../output.js";
 
 /**
  * Roughly Germany's bounding box (generous margins). Used only to catch a likely

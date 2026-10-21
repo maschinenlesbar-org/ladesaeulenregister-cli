@@ -17,7 +17,7 @@ ladesaeulen [global options] <command> [command options]
 | `--user-agent <ua>` | User-Agent header value (not blank; Latin-1 text without control characters) |
 | `--max-retries <n>` | retries for transient 429/503 responses and reset connections (0..10, default 2). Each retry backs off 200 ms, 400 ms, …, or waits the server's `Retry-After` (seconds or an HTTP-date) when that is longer; a `Retry-After` above 30 s is not retried — the error is reported at once and names the wait the server asked for. A connection reset mid-request (`socket hang up`, `ECONNRESET`, a body cut off mid-way) is retried the same way, with the linear backoff, for a GET (a long `--where` sent as a form POST is not re-sent); a run that recovers exits 0. A status or reset that persists ends the message with `(after N retries)`. Other network errors (a refused connection, DNS, a timeout) are not retried. Each retry logs one WARN record of `ladesaeulen.http` before it waits (`HTTP 503 from host: retry 1 of 3 in 2 s`) |
 | `--max-response-bytes <n>` | cap the response body size in bytes (0 = unlimited; default 100 MiB) |
-| `--compact` | print JSON on a single line (for piping to `jq`) |
+| `--compact` | print JSON on a single line (for piping to `jq`). An answer nested too deeply to pretty-print is an error (exit 1) that suggests `--compact` |
 | `--log-format <format>` | how errors, warnings and notes are written to stderr: `text` (default; log4j style, `2026-10-09T14:03:12.481Z WARN  [ladesaeulen.http] …`) or `jsonl` (one JSON object per line: `ts`, `level`, `topic`, `msg`). stdout is not affected |
 | `-V, --version` / `-h, --help` | version / help |
 
