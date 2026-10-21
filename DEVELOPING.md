@@ -342,7 +342,12 @@ added P20 (`conformance-p20-cleartext-warning`: a remote plain `http:` base URL 
 two cases are skipped) and P21 (`conformance-p21-readme-links`: every relative link in
 `README.md` points to a file `package.json` `files` ships, since npmjs.com shows the README;
 other documents are linked by their GitHub URL). P23 (`conformance-p23-log-format`, 2026-10-09)
-checks that every stderr line is a log record and `--log-format text|jsonl`.
+checks that every stderr line is a log record and `--log-format text|jsonl`. The kit rollout
+of 2026-10-21 added P24 (`conformance-p24-input-corpus`: an input is canonicalised or refused,
+never sent raw; both lists are empty here, since `--where` is SQL the client sends as written
+and no id goes into a path) and P25 (`conformance-p25-response-corpus`: a number a double
+can't carry exactly, or an empty answer, is an error on the CLI and in the library, read on a
+station's latitude). P26 (`-o` integrity) does not apply: the CLI has no `-o`.
 
 ## Conventions to keep
 
