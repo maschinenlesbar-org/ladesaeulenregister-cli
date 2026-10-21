@@ -290,7 +290,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   range (U+009B is the 8-bit CSI) and the bidi controls (`isBidiControl`: U+061C, U+200E,
   U+200F, U+202A–U+202E, U+2066–U+2069) raw, and a terminal acts on them; `renderJson`
   (`escapeControlChars`, `output.ts`) writes them as `\uXXXX`, so U+202E in an operator
-  name prints as `\u202e`. The JSON stays equivalent.
+  name prints as `\u202e`. The JSON stays equivalent. Each such character becomes six, so the
+  output is measured first: one longer than V8's longest string is an `OutputError` (`The
+  answer is too large to print (N characters once its control characters are escaped).`,
+  exit 1); otherwise it is built in chunks of 64 Ki characters and joined once, which keeps
+  100 MB of DEL characters within memory.
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).
