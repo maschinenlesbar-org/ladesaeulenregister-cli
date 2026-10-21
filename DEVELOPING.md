@@ -88,7 +88,7 @@ apps/cli/src/cli/
     io.ts        # injectable I/O (CliDeps / CliIO) — no env seam (no auth); the logger and the clock
     log.ts       # the stderr log: records with ts, level, topic; --log-format text|jsonl
     shared.ts    # option parsers (incl. --near lat,lon), global->engine mapping, action()
-    output.ts    # renderJson: control characters escaped, a deep or huge answer printed (or refused) cleanly
+    output.ts    # renderJson: DEL, C1 and bidi controls escaped, a deep or huge answer printed (or refused) cleanly
     commands/stations.ts  # stations / count-by / info / fields
     program.ts   # assembles the commander program
     run.ts       # parses argv -> exit code (no process.exit; testable)
@@ -271,6 +271,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   decimal fraction below 2^53 (a power of `22.08`, a coordinate) keeps a double's
   precision; the register's numbers (OBJECTIDs, epoch-ms dates, kW, degrees) are all
   well inside that.
+- **Printed JSON is terminal-safe.** `JSON.stringify` escapes C0 but leaves DEL, the C1
+  range (U+009B is the 8-bit CSI) and the bidi controls (`isBidiControl`: U+061C, U+200E,
+  U+200F, U+202A–U+202E, U+2066–U+2069) raw, and a terminal acts on them; `renderJson`
+  (`escapeControlChars`, `output.ts`) writes them as `\uXXXX`, so U+202E in an operator
+  name prints as `\u202e`. The JSON stays equivalent.
 - **Logical errors are HTTP 200 with `{"error":{code,message,details}}`** — the client
   checks for `error` and throws `LadesaeulenApiError` (`arcgisCode` set). This is the
   key correctness point (mirrors the family's HTTP-200-error pattern).

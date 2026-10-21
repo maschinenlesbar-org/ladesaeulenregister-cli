@@ -53,3 +53,13 @@ test("--compact takes the gap path only for an answer holding a huge string, the
   assert.deepEqual(calls.map((args) => (args.length >= 3 ? args[2] : "none")), ["", "none", "", "", 2]);
   assert.deepEqual(out, ['"stub"', '"stub"', '"stub"', '"stub"', '"stub"']);
 });
+
+test("printed JSON escapes DEL, C1 and the bidi controls, which JSON.stringify leaves raw", async () => {
+  const name = "Ein \u001b[31mrotes\u009b\u007f Ort \u202e\u061c\u200e\u200f\u202a\u2066\u2069 Ende";
+  const cli = makeCli(() => jsonResponse({ features: [{ attributes: { ID: "1", Ort: name } }] }));
+  assert.equal(await run(["--compact", "stations"], cli.deps), 0);
+  const printed = cli.out.join("\n");
+  assert.doesNotMatch(printed, /[\u001b\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/);
+  assert.match(printed, /\\u202e\\u061c\\u200e\\u200f\\u202a\\u2066\\u2069/);
+  assert.equal((JSON.parse(printed) as { features: Array<{ attributes: { Ort: string } }> }).features[0]?.attributes.Ort, name);
+});

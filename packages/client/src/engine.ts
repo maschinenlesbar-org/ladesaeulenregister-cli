@@ -202,8 +202,8 @@ export interface RequestTarget {
  * MITM'd endpoint could inject
  * ANSI/OSC terminal escape sequences (screen clears, title changes, output
  * spoofing) when the message reaches the user's terminal. The CLI's JSON output is
- * escaped separately (escapeControlChars in cli/shared.ts), since `JSON.stringify`
- * alone leaves DEL and the C1 range raw. Removes all C0 controls (except
+ * escaped separately (escapeControlChars in cli/output.ts), since `JSON.stringify`
+ * alone leaves DEL, the C1 range and the bidi controls raw. Removes all C0 controls (except
  * tab/newline), DEL, and the C1 range; implemented via char codes so this source
  * file never contains a raw control byte.
  */
@@ -219,6 +219,21 @@ export function sanitizeServerText(text: string): string {
     out += ch;
   }
   return out;
+}
+
+/**
+ * True for a bidi formatting character (U+061C, U+200E, U+200F, U+202A–U+202E,
+ * U+2066–U+2069): it reorders the text that follows it on a terminal, so printed JSON
+ * escapes it (the CLI's `escapeControlChars`) and a log record too.
+ */
+export function isBidiControl(code: number): boolean {
+  return (
+    code === 0x061c ||
+    code === 0x200e ||
+    code === 0x200f ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
+  );
 }
 
 /**
