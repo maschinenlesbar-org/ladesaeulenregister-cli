@@ -338,9 +338,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   returns the name, `lastEditDate`, `dataLastEditDate` (epoch ms → ISO 8601) and
   `maxRecordCount`, from the same request `fields()` makes. The layer is refreshed
   irregularly (last edit 2026-10-01 when checked on 2026-10-05).
-- **Sixteen columns are always empty** (`columns.ts`, `EMPTY_FIELDS`; one live
-  `IS NOT NULL` count over all of them gave 0 on 2026-10-06): the `evses_*` per-connector
-  columns, `documentDate`, `documentTime`, `json_type`, `Steckersystem_Ladepunkt7..10`.
+- **Eighteen columns are always empty** (`columns.ts`, `EMPTY_FIELDS`; one live
+  `IS NOT NULL` count over all of them gave 0 on 2026-10-21): the `evses_*` per-connector
+  columns, `documentDate`, `documentTime`, `json_type`, `Steckersystem_Ladepunkt7..10`,
+  `Zugangsbeschraenkung`, `Paymentsystem_Con`.
   `emptyFieldsIn(text)` finds them in a `where`/`orderBy`/`outFields`/group field (as whole
   identifiers, outside SQL string literals); the CLI prints a stderr note then (`IS NULL` on
   it matches every row, any other condition none; exit code unchanged), and `fields` names

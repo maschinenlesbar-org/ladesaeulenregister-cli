@@ -69,9 +69,10 @@ always empty), so cite `dataLastEditDate` with an answer.
 ### `fields` — list queryable columns
 
 `ladesaeulen fields` → `[{ name, type, alias }, …]`. Use it to build `--where`,
-`--fields` and `count-by`. Sixteen of the listed columns are `null` on every row (the
+`--fields` and `count-by`. Eighteen of the listed columns are `null` on every row (the
 `evses_*` per-connector columns, `documentDate`, `documentTime`, `json_type`,
-`Steckersystem_Ladepunkt7..10`; see GLOSSARY.md): `fields` names them on stderr, and
+`Steckersystem_Ladepunkt7..10`, `Zugangsbeschraenkung`, `Paymentsystem_Con`; checked
+2026-10-21; see GLOSSARY.md): `fields` names them on stderr, and
 `stations`/`count-by` log an `INFO` record (`… is empty (null) on every row`) when a filter,
 sort, field list or group names one (outside a string literal), since its `0`, its full count
 with `IS NULL` or its single `null` group is not an answer about that column.

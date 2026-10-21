@@ -432,12 +432,29 @@ test("the empty-column note says IS NULL matches every row, and ignores a column
   assert.match(untimed(after.err.join("\n")), /json_type is empty/);
 });
 
+test("Zugangsbeschraenkung and Paymentsystem_Con are always-empty columns too: noted on a group, named by fields (B02-2)", async () => {
+  // Both were null on every row (live IS NOT NULL counts 0, 2026-10-21), but got no note.
+  for (const col of ["Zugangsbeschraenkung", "Paymentsystem_Con"]) {
+    const grouped = makeCli(() => jsonResponse({ features: [{ attributes: { [col]: null, count: 117584 } }] }));
+    assert.equal(await run(["count-by", col], grouped.deps), 0, col);
+    assert.match(untimed(grouped.err.join("\n")), new RegExp(`^INFO  \\[ladesaeulen\\.api\\] ${col} is empty \\(null\\) on every row of the register \\(checked 2026-10-21\\)`), col);
+  }
+  const listed = makeCli(() =>
+    jsonResponse({ fields: ["Ort", "Zugangsbeschraenkung", "Paymentsystem_Con"].map((name) => ({ name, type: "esriFieldTypeString" })) }),
+  );
+  assert.equal(await run(["fields"], listed.deps), 0);
+  assert.equal(
+    untimed(listed.err.join("\n")),
+    "INFO  [ladesaeulen.api] 2 of these columns are empty on every row of the register (checked 2026-10-21): Zugangsbeschraenkung, Paymentsystem_Con.",
+  );
+});
+
 test("fields notes the columns that are empty on every row", async () => {
   const cli = makeCli(() =>
     jsonResponse({ fields: [{ name: "Ort", type: "esriFieldTypeString" }, { name: "json_type", type: "esriFieldTypeString" }] }),
   );
   assert.equal(await run(["fields"], cli.deps), 0);
-  assert.equal(untimed(cli.err.join("\n")), "INFO  [ladesaeulen.api] 1 of these columns are empty on every row of the register (checked 2026-10-06): json_type.");
+  assert.equal(untimed(cli.err.join("\n")), "INFO  [ladesaeulen.api] 1 of these columns are empty on every row of the register (checked 2026-10-21): json_type.");
 });
 
 test("an a:b@c argument (a User-Agent, a rejected value) is neither a credential in the log nor rewritten in the JSON on stdout (L14)", async () => {

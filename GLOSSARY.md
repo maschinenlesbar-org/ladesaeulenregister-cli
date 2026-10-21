@@ -47,10 +47,11 @@ data are German (with umlauts); keep them verbatim in `--where`.
 - **`go_live_date` is `dd.mm.yyyy` text**, so `--order-by "go_live_date DESC"` returns
   `31.12.2025` first although stations went live in 2026. Filter by year or month with
   `LIKE '%.2026'` / `LIKE '%.08.2026'` instead of sorting.
-- **Sixteen listed columns are always empty.** `ladesaeulen fields` lists them, but they are
-  `null` on every row (checked 2026-10-06): the per-connector `evses_*` columns (e.g.
+- **Eighteen listed columns are always empty.** `ladesaeulen fields` lists them, but they are
+  `null` on every row (checked 2026-10-21): the per-connector `evses_*` columns (e.g.
   `evses_evse_connectors_connector___max_electric_power_connector`), `documentDate`,
-  `documentTime`, `json_type` and `Steckersystem_Ladepunkt7..10`. `IS NULL` on one matches
+  `documentTime`, `json_type`, `Steckersystem_Ladepunkt7..10`, `Zugangsbeschraenkung` and
+  `Paymentsystem_Con`. `IS NULL` on one matches
   every station, any other condition on one matches nothing (`0`, exit 0), and a group on one
   is a single `null` group; the CLI prints a note when you name one (in a string literal such
   as `Ort='json_type'` the name is a value, and no note is printed). `F_overlaps` (always `1`) and `fme_rejection_code` (always

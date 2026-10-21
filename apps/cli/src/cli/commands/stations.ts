@@ -65,7 +65,7 @@ function emptyFieldsNote(deps: CliDeps, texts: Array<string | undefined>): void 
   const one = names.length === 1;
   logOf(deps).info(
     "api",
-    `${names.join(", ")} ${one ? "is" : "are"} empty (null) on every row of the register (checked 2026-10-06): ` +
+    `${names.join(", ")} ${one ? "is" : "are"} empty (null) on every row of the register (checked 2026-10-21): ` +
       `\`IS NULL\` on ${one ? "it" : "them"} matches every row, any other condition on ${one ? "it" : "them"} none, ` +
       `and a group on ${one ? "it" : "one of them"} is one null group.`,
   );
@@ -219,7 +219,7 @@ export function registerCommands(program: Command, deps: CliDeps): void {
         if (empty.length > 0) {
           logOf(deps).info(
             "api",
-            `${empty.length} of these columns are empty on every row of the register (checked 2026-10-06): ` +
+            `${empty.length} of these columns are empty on every row of the register (checked 2026-10-21): ` +
               `${empty.join(", ")}.`,
           );
         }

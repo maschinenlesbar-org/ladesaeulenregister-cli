@@ -48,10 +48,10 @@ Daten sind deutsch (mit Umlauten); übernehmen Sie sie in `--where` unverändert
 - **`go_live_date` ist Text im Format `tt.mm.jjjj`**, daher liefert `--order-by "go_live_date DESC"`
   zuerst `31.12.2025`, obwohl 2026 Ladeeinrichtungen in Betrieb gingen. Filtern Sie nach Jahr oder
   Monat mit `LIKE '%.2026'` / `LIKE '%.08.2026'`, statt zu sortieren.
-- **Sechzehn aufgeführte Spalten sind immer leer.** `ladesaeulen fields` nennt sie, aber sie sind in
-  jeder Zeile `null` (geprüft am 06.10.2026): die Spalten je Stecker `evses_*` (z. B.
+- **Achtzehn aufgeführte Spalten sind immer leer.** `ladesaeulen fields` nennt sie, aber sie sind in
+  jeder Zeile `null` (geprüft am 21.10.2026): die Spalten je Stecker `evses_*` (z. B.
   `evses_evse_connectors_connector___max_electric_power_connector`), `documentDate`, `documentTime`,
-  `json_type` und `Steckersystem_Ladepunkt7..10`. `IS NULL` darauf findet jede Ladeeinrichtung, jede
+  `json_type`, `Steckersystem_Ladepunkt7..10`, `Zugangsbeschraenkung` und `Paymentsystem_Con`. `IS NULL` darauf findet jede Ladeeinrichtung, jede
   andere Bedingung darauf nichts (`0`, Exit-Code 0), eine Gruppierung ergibt eine einzige
   `null`-Gruppe; die CLI gibt einen Hinweis aus, wenn Sie eine davon nennen (in einem
   Zeichenketten-Literal wie `Ort='json_type'` ist der Name ein Wert, und es gibt keinen Hinweis). `F_overlaps` (immer `1`) und `fme_rejection_code` (immer `MISSING_PARAMETER_LIST`)
