@@ -11,7 +11,7 @@
 //   await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 
 import { RequestEngine, type EngineOptions } from "./engine.js";
-import { LadesaeulenParseError, LadesaeulenValidationError, cutForMessage, quoteValue } from "./errors.js";
+import { LadesaeulenError, LadesaeulenParseError, LadesaeulenValidationError, cutForMessage, quoteValue } from "./errors.js";
 import type { QueryParams } from "./query.js";
 import {
   assertValid,
@@ -250,6 +250,20 @@ const POWER_COUNT_PAGE = 2000;
 /** Most pages `count()` reads for a `minChargePointKw` query (200,000 rows, more than the register holds). */
 const MAX_POWER_COUNT_PAGES = 100;
 
+/**
+ * A failure on a later page of the `minChargePointKw` count, with the page named: the request
+ * URL in the message is cut at 500 characters, which falls before `resultOffset` (the
+ * connector columns fill most of it), so page 2 failed with the same text as page 1, and
+ * nothing said that earlier pages had been read. The error keeps its class and fields; only
+ * its message gets `; page N of the minChargePointKw count (resultOffset O), after N-1 pages
+ * read`. A failure on the first page is left as it is.
+ */
+function onPage(err: unknown, page: number, offset: number): unknown {
+  if (page === 0 || !(err instanceof LadesaeulenError)) return err;
+  err.message += `; page ${page + 1} of the minChargePointKw count (resultOffset ${offset}), after ${page} ${page === 1 ? "page" : "pages"} read`;
+  return err;
+}
+
 /** The keys of `StationQuery.near`. */
 const NEAR_KEYS = ["lat", "lon", "radiusKm"] as const;
 
@@ -434,8 +448,14 @@ export class LadesaeulenClient {
         },
         { f: "json", returnGeometry: false },
       );
-      const { res, request } = await this.get<ArcGisQueryResponse>(path, params);
-      const features = featureList(res.features, request);
+      let answer: { res: ArcGisQueryResponse; request: string };
+      try {
+        answer = await this.get<ArcGisQueryResponse>(path, params);
+      } catch (err) {
+        throw onPage(err, page, offset);
+      }
+      const features = featureList(answer.res.features, answer.request);
+      const res = answer.res;
       total += withChargePointPower(features, minKw).length;
       if (res.exceededTransferLimit !== true || features.length === 0) return total;
       offset += features.length;

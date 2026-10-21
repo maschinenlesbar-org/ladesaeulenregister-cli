@@ -328,7 +328,10 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   connector column. `StationQuery.minChargePointKw` (`--min-point-kw`) filters on it: the
   server gets `CAST(max_electric_power_station AS FLOAT) >= n` (exact, because of the cap),
   the client checks the ratings and adds the connector columns to `outFields`; `count()`
-  pages through the candidates (2,000 per request, `OBJECTID` order). `apps/cli/test/power.test.ts`
+  pages through the candidates (2,000 per request, `OBJECTID` order). A failure on a later
+  page keeps its error class and fields, and its message ends `; page N of the
+  minChargePointKw count (resultOffset O), after N-1 pages read`: the URL in the message is
+  cut at 500 characters before `resultOffset`, so the page could not be told otherwise. `apps/cli/test/power.test.ts`
   uses real register rows.
 - The layer has ~60 columns incl. per-charge-point connector fields and a large
   `F_response_body` JSON blob → the client ships a **curated `DEFAULT_FIELDS`**; the

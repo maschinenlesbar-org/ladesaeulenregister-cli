@@ -124,3 +124,29 @@ test("--min-point-kw drives the same filter; bad values are usage errors", async
     assert.equal(await run(["stations", "--min-point-kw", bad], deps), 2, bad);
   }
 });
+
+test("a failure on a later page of the minChargePointKw count names the page and its offset (B04-1)", async () => {
+  // The request URL of a page is over 500 characters (the connector list), so the message cut
+  // it right before resultOffset: page 2 failed with the same text as page 1 would have.
+  const mt = makeMockTransport((req: HttpRequest) =>
+    queryOf(req).get("resultOffset") === "0"
+      ? jsonResponse({ features: [{ attributes: shell }, { attributes: jolt }], exceededTransferLimit: true })
+      : { status: 503, headers: { "content-type": "text/plain" }, body: Buffer.from("busy") },
+  );
+  const client = new LadesaeulenClient({ transport: mt.transport, maxRetries: 0 });
+  await assert.rejects(client.count({ minChargePointKw: 150 }), (err: Error & { status?: number }) => {
+    assert.equal(err.name, "LadesaeulenApiError");
+    assert.equal(err.status, 503);
+    assert.match(err.message, /: busy; page 2 of the minChargePointKw count \(resultOffset 2\), after 1 page read$/);
+    return true;
+  });
+  const out: string[] = [];
+  const err: string[] = [];
+  const deps = { io: { out: (s: string) => out.push(s), err: (s: string) => err.push(s) }, createClient: (o: object) => new LadesaeulenClient({ ...o, transport: mt.transport }) };
+  assert.equal(await run(["--max-retries", "0", "stations", "--min-point-kw", "150", "--count"], deps), 1);
+  assert.deepEqual(out, []);
+  assert.match(err.join("\n"), /ERROR \[ladesaeulen\.api\] HTTP 503 for GET .*: busy; page 2 of the minChargePointKw count \(resultOffset 2\), after 1 page read/);
+  // A failure on the first page needs no page: nothing was read before it.
+  const first = new LadesaeulenClient({ transport: makeMockTransport(() => ({ status: 503, headers: {}, body: Buffer.from("busy") })).transport, maxRetries: 0 });
+  await assert.rejects(first.count({ minChargePointKw: 150 }), (e: Error) => e.message.endsWith(": busy"));
+});
