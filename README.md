@@ -76,16 +76,20 @@ never printing them); stdout and the exit code are unchanged. See [Usage.md](htt
 stdout carries the JSON only. Each line on stderr is a **log record**: a timestamp (UTC), a
 level (`ERROR`, `WARN`, `INFO`) and a topic, the program and the area it comes from
 (`ladesaeulen.cli` for usage errors, `ladesaeulen.api` for the API's answers and the notes on
-them, an ArcGIS `error` envelope and a malformed answer included, `ladesaeulen.http` for the connection, `ladesaeulen.output` for writing the result: a failed
-or cut-short write to stdout, an answer too deeply nested or too large to print). An error about an answer names the request (`GET <url>: the answer is not valid
-JSON`). Text in an answer is never changed silently: bytes that are not valid in its charset
-and half characters (lone surrogates) are replaced with U+FFFD, so the output stays readable
-for `jq`, and a `WARN` record of `ladesaeulen.api` says how many. By default it is written log4j style;
-`--log-format jsonl` writes one JSON object per line instead. A record is always one line:
-a line break, a control character or a bidi control in a message (a server's text, a value
-you typed) is written as an escape (`\n`, `\u001b`, `\u202e`), so it can neither split a
-record nor forge another one, nor steer the terminal; a message longer than 4000
-characters is cut and ends in `… (N more characters)`:
+them, an ArcGIS `error` envelope and a malformed answer included, `ladesaeulen.http` for the
+connection, `ladesaeulen.output` for writing the result: a failed or cut-short write to
+stdout, an answer too deeply nested or too large to print). An error about an answer names
+the request (`GET <url>: the answer is not valid JSON`). Text in an answer is never changed
+silently: bytes that are not valid in its charset and half characters (lone surrogates) are
+replaced with U+FFFD, so the output stays readable for `jq`, and a `WARN` record of
+`ladesaeulen.api` says how many. By default it is written log4j style; `--log-format jsonl`
+writes one JSON object per line instead. A record is always one line: a line break, a control
+character or a bidi control in a message is written as an escape (`\n`, `\u001b`, `\u202e`),
+so it can neither split a record nor forge another one, nor steer the terminal. A value you
+typed keeps every character, escaped; in a server's text (an ArcGIS error message, an error
+body) the control characters other than tab and line break (ESC, DEL, C1) are removed before
+that, so what a server sends can't drive the terminal even inside an escape. A message longer
+than 4000 characters is cut and ends in `… (N more characters)`:
 
 ```text
 2026-10-09T14:03:12.481Z WARN  [ladesaeulen.http] requests to mirror.test are sent unencrypted (http:, not https:)
