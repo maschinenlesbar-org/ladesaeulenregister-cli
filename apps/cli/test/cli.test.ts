@@ -497,3 +497,35 @@ test("a parse error is logged in the format commander would have parsed (L6)", a
     assert.ok(cli.err.length > 0 && cli.err.every((line) => isJsonl(line) === jsonl), `${argv.join(" ")}:\n${cli.err.join("\n")}`);
   }
 });
+
+// T15 of the 2026-10-21 fix round (jobsuche-cli 28be809): a URL with a password anywhere in an
+// argument — padded, inside an SQL literal, after a dash — must never reach stderr, neither raw
+// in a refusal or note nor percent-encoded in the request URL of an error record.
+test("a password in a URL inside any argument is redacted on stderr, raw or percent-encoded (T15)", async () => {
+  const url = "https://bob:s3cretpw@host.example/x";
+  const argvs = [
+    ["stations", "--where", `Ort='${url}'`],
+    ["stations", "--where", ` ${url}`],
+    ["stations", "--where", `Ort='a' OR Betreiber LIKE '%${url}%'`, "--count"],
+    ["count-by", "state", "--where", `Ort='${url}'`],
+    ["stations", "--where", `Ort='${url}'`, "--min-point-kw", "150", "--count"],
+    ["stations", "--fields", `Ort, ${url}`],
+    ["stations", "--order-by", ` -${url}`],
+    ["count-by", ` ${url}`],
+    ["stations", `--where=Ort='${url}'`],
+    ["stations", "--where", `Ort='${url}'`, "--bogus"],
+  ];
+  const answers = [
+    () => jsonResponse({ error: { code: 400, message: "bad", details: [`where Ort='${url}'`] } }),
+    () => jsonResponse({ message: "not found" }, 404),
+    () => ({ status: 503, headers: {}, body: Buffer.from("busy") }),
+  ];
+  for (const argv of argvs) {
+    for (const answer of answers) {
+      const cli = makeCli(answer);
+      await run(["--max-retries", "0", ...argv], cli.deps);
+      const err = cli.err.join("\n");
+      assert.doesNotMatch(err, /s3cretpw|bob%3As3|s3cretpw%40/, `${JSON.stringify(argv)}: ${err}`);
+    }
+  }
+});
