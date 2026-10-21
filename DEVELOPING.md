@@ -275,7 +275,12 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   an ArcGIS sentinel like `1.7976931348623157E308` print as the same number and pass. A
   decimal fraction below 2^53 (a power of `22.08`, a coordinate) keeps a double's
   precision; the register's numbers (OBJECTIDs, epoch-ms dates, kW, degrees) are all
-  well inside that.
+  well inside that. A library caller whose server sends a member past 2^53 (a 64-bit id)
+  declares it with the engine option `bigIntegerKeys` (a set of member names, none by
+  default): the value of a declared member is delivered as its exact literal, a string
+  (`"1858054135406919680"`), whatever its size; every other number keeps the rule above.
+  `scanNumbers` (`engine.ts`) does both in one linear pass that skips strings, with no
+  reviver. The register declares none.
 - **Printed JSON is terminal-safe.** `JSON.stringify` escapes C0 but leaves DEL, the C1
   range (U+009B is the 8-bit CSI) and the bidi controls (`isBidiControl`: U+061C, U+200E,
   U+200F, U+202A–U+202E, U+2066–U+2069) raw, and a terminal acts on them; `renderJson`
