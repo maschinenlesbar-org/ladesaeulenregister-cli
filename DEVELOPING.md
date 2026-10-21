@@ -23,7 +23,7 @@ npm run bump -- <patch|minor|major>  # bump apps/cli, commit, tag vX.Y.Z
 node --test apps/cli/dist/test/cli.test.js   # one file, after a build
 ```
 
-CI (`ci.yml`) type-checks, builds and tests on Node 22/24, then packs the real tarball,
+CI (`ci.yml`) type-checks, builds and tests on Node 22/24/26, then packs the real tarball,
 checks the pack left nothing behind, installs it globally with the registry out of reach and
 runs the bin. `release.yml` (on a `v*` tag, made by `npm run bump`) verifies the tag against
 `apps/cli/package.json`, writes the SBOMs (scoped to the `apps/cli` workspace) and runs
@@ -351,7 +351,7 @@ station's latitude). P26 (`-o` integrity) does not apply: the CLI has no `-o`.
 
 ## Conventions to keep
 
-- **Zero runtime HTTP deps**; strict TS + ESM; passes on Node 22/24 (`engines` `>=22.12`, the floor of the pinned `commander`).
+- **Zero runtime HTTP deps**; strict TS + ESM; passes on Node 22/24/26 (`engines` `>=22.12`, the floor of the pinned `commander`).
 - **Exit codes** (`run.ts`): help/version → 0; usage → 2; 404 → 4; network → 6; other → 1.
   The bin shim installs `handleOutputErrors()` (`io.ts`) before `run()`: an EPIPE on
   stdout (`| head`) exits 0 quietly, an EPIPE on stderr is ignored so the run's own code
