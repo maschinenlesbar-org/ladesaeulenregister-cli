@@ -202,8 +202,8 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   transport's per-hop scheme check and real transport failures.
   **The CLI redacts credentials on output:** `run.ts` (`redactionFor`, `withRedactedOutput`) takes the
   exact userinfo of every URL in every argument (`credentialsIn`, exported, on the argument and
-  on the rest of it from wherever a scheme starts inside it, `urlsWithin`: a URL in an SQL
-  literal of `--where`, padded or after a dash; and its percent-encoded form with the `@`, as a
+  on the rest of it from wherever a scheme starts inside it, `urlsWithin`, linear: each `://` found with
+  indexOf, at most 64 URLs per argument: a URL in an SQL literal of `--where`, padded or after a dash; and its percent-encoded form with the `@`, as a
   request URL in an error record carries it; only a URL that starts with a scheme counts, since a bare `a:b@c` is a search text or a User-Agent as
   often as a credential, except as the `--base-url` value, which is read as if it had
   one) and replaces it with
