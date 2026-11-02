@@ -482,7 +482,8 @@ export class LadesaeulenClient {
     const request = answer.request;
     const type = res["type"];
     if (type !== "FeatureCollection") {
-      const got = typeof type === "string" ? quoteValue(type) : kindOf(type);
+      // A value from the answer is quoted with quoteServerValue: the base URL's credentials scrubbed.
+      const got = typeof type === "string" ? this.engine.quoteServerValue(type) : kindOf(type);
       throw shapeError(request, `a GeoJSON FeatureCollection, got type ${got}`);
     }
     const features: unknown = res["features"];

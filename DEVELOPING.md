@@ -230,7 +230,11 @@ replaced was quadratic on a long `a.a.…` run in an answer and ran past `--time
   body, `detail`, a transport's error message and its `cause` chain — has the userinfo
   (raw and percent-decoded) and the forms a server echoes it back in (the `Basic` value,
   the decoded `user:password`, the password alone from 4 characters:
-  `echoedCredentialForms`) scrubbed. `apps/cli/test/conformance-p2-library-redaction.test.ts`
+  `echoedCredentialForms`) scrubbed. Each part of the ArcGIS envelope (`message`, every `details`
+  entry) is scrubbed before it is joined and cut at 500 characters (`describeArcGisError`'s
+  `scrub`), so the cut never splits a password into a prefix no exact string matches; a value a
+  shape error quotes from a 2xx answer (the GeoJSON `type`) is quoted with
+  `RequestEngine.quoteServerValue`, scrubbed before the cut. `apps/cli/test/conformance-p2-library-redaction.test.ts`
   checks the client, nine failing transports and five rejected base URLs.
   Wrong-typed arguments are a `LadesaeulenValidationError` too, never a raw
   `TypeError`: a query that is not an object (`null`/`undefined` mean `{}`), options

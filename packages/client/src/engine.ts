@@ -27,6 +27,7 @@ import {
   cutForMessage,
   cutText,
   echoedCredentialForms,
+  quoteValue,
   redactCredentials,
   redactSecrets,
   redactUrl,
@@ -267,10 +268,12 @@ export function isBidiControl(code: number): boolean {
  * string as is, or an `{code, message, details}` object's `message` and `details`
  * joined with "; ". Empty parts and repeats are dropped (the live server sends
  * `"message": ""` with the reason only in `details`, and sometimes the same text in
- * both). Every part is stripped of control characters (`sanitizeServerText`).
- * Returns `undefined` when nothing readable is left.
+ * both). Every part goes through `scrub` first (the engine passes its scrub of the base URL's
+ * credentials), then is stripped of control characters (`sanitizeServerText`); the joined text
+ * is cut at 500 characters last, so the cut never splits a credential the scrub would have
+ * matched whole. Returns `undefined` when nothing readable is left.
  */
-export function describeArcGisError(error: unknown): string | undefined {
+export function describeArcGisError(error: unknown, scrub: (text: string) => string = (text) => text): string | undefined {
   let parts: unknown[] = [];
   if (typeof error === "string") parts = [error];
   else if (error !== null && typeof error === "object") {
@@ -280,7 +283,7 @@ export function describeArcGisError(error: unknown): string | undefined {
   const seen = new Set<string>();
   for (const part of parts) {
     if (typeof part !== "string") continue;
-    const text = sanitizeServerText(part).trim();
+    const text = sanitizeServerText(scrub(part)).trim();
     if (text !== "") seen.add(text);
   }
   return seen.size > 0 ? cutForMessage([...seen].join("; ")) : undefined;
@@ -553,6 +556,15 @@ export class RequestEngine {
   }
 
   /**
+   * A value from an answer quoted for an error message (`quoteValue`), the base URL's credentials
+   * scrubbed first, before the cut: a 2xx answer (a shape the client refuses) can echo them as
+   * well as an error body. API code quotes server values with this.
+   */
+  quoteServerValue(value: string): string {
+    return quoteValue(this.scrub(value));
+  }
+
+  /**
    * A transport failure as the `cause` of the error the engine raises: the original when its
    * text carries no credentials, otherwise a copy with them scrubbed (message, `code` and the
    * cause chain kept), so logging the error with its causes can't reveal the base URL's
@@ -580,14 +592,16 @@ export class RequestEngine {
    */
   envelopeError(path: string, query: QueryParams, envelope: unknown, error: unknown): LadesaeulenApiError {
     const e = error !== null && typeof error === "object" ? (error as { code?: unknown }) : {};
-    const detail = describeArcGisError(error);
+    // Each part scrubbed before it is cleaned, joined and cut: an exact-string scrub after the
+    // cut missed a password the cut had split, and left its prefix in the message.
+    const detail = describeArcGisError(error, (text) => this.scrub(text));
     const target = this.requestTarget(path, query);
     return new LadesaeulenApiError({
       url: target.url,
       method: target.method,
       body: this.scrub(JSON.stringify(envelope)),
       arcgisCode: typeof e.code === "number" ? e.code : undefined,
-      ...(detail === undefined ? {} : { detail: this.scrub(detail) }),
+      ...(detail === undefined ? {} : { detail }),
     });
   }
 

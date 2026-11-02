@@ -814,3 +814,45 @@ test("a TextBuilder joins its pieces in order across batches", () => {
   assert.equal(b.toString(), expected.join(""));
   assert.equal(new TextBuilder().toString(), "");
 });
+
+// Security audit 2026-10-27, D (envelopeError): the ArcGIS envelope's text was cut at 500
+// characters first and scrubbed after, as exact strings, so a password across the cut left its
+// prefix in the message and the detail. And a 2xx value the client quotes in a shape error (the
+// GeoJSON `type`) wasn't scrubbed at all.
+test("an echoed password across the 500-character cut of an ArcGIS envelope leaves no part of it", async () => {
+  const base = "https://alice:s3cretPassw0rd@mirror.example/FeatureServer";
+  const padded = `${"x".repeat(490)} s3cretPassw0rd tail`;
+  const errors = [
+    { code: 400, message: padded, details: [] },
+    { code: 400, message: "", details: [padded] },
+    { code: 400, message: "Inv", details: [padded] },
+    padded,
+  ];
+  for (const error of errors) {
+    const mt = makeMockTransport(() => jsonResponse({ error }));
+    const client = new LadesaeulenClient({ baseUrl: base, transport: mt.transport });
+    const err = await client.stations().then(
+      () => assert.fail("the envelope should be an error"),
+      (caught: unknown) => caught,
+    );
+    assert.ok(err instanceof LadesaeulenApiError, String(err));
+    for (const text of [err.message, err.detail ?? ""]) {
+      assert.doesNotMatch(text, /s3cr/, JSON.stringify(error).slice(0, 80));
+    }
+    assert.match(err.detail ?? "", /\*\*\*/);
+  }
+});
+
+test("a value the client quotes from a 2xx answer is scrubbed before it is cut", async () => {
+  const base = "https://alice:s3cretPassw0rd@mirror.example/FeatureServer";
+  for (const type of ["s3cretPassw0rd", `${"x".repeat(495)}s3cretPassw0rd`, `see https://alice:s3cretPassw0rd@mirror.example/`]) {
+    const mt = makeMockTransport(() => jsonResponse({ type, features: [] }));
+    const client = new LadesaeulenClient({ baseUrl: base, transport: mt.transport });
+    const err = await client.geojson().then(
+      () => assert.fail("the shape should be refused"),
+      (caught: unknown) => caught,
+    );
+    assert.ok(err instanceof LadesaeulenParseError, String(err));
+    assert.doesNotMatch(err.message, /s3cr/, type.slice(-40));
+  }
+});
