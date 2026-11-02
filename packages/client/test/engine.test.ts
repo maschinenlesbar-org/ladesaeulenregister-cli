@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { TextDecoder } from "node:util";
+import { TextDecoder, inspect } from "node:util";
 import assert from "node:assert/strict";
 import {
   RequestEngine,
@@ -855,4 +855,134 @@ test("a value the client quotes from a 2xx answer is scrubbed before it is cut",
     assert.ok(err instanceof LadesaeulenParseError, String(err));
     assert.doesNotMatch(err.message, /s3cr/, type.slice(-40));
   }
+});
+
+// Security audit 2026-10-27, D (toApiError): the body was scrubbed as sent, as exact strings, and
+// then JSON-decoded; a password echoed with a JSON escape (`\"`, `ä`, any `\uXXXX`) passed
+// the scrub and was decoded back into `.message` and `.detail`, and `.body` kept the escaped,
+// trivially reversible form.
+// A password with characters a JSON writer escapes (a quote) or may write as \u00XX (an umlaut).
+const ESC_PW = "pä\"s's-W0rd";
+const ESC_BASE = `https://alice:${encodeURIComponent(ESC_PW)}@mirror.example/FeatureServer`;
+const ESC_BASIC = Buffer.from(`alice:${ESC_PW}`, "utf8").toString("base64");
+/** The forms of the credential an error must not carry: decoded, and as a quoted value spells them (`\"`). */
+const ESC_SECRETS = [ESC_PW, `alice:${ESC_PW}`, ESC_BASIC].flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]);
+/** `text` as a JSON writer that escapes every non-ASCII character writes it (Python's json.dumps, PHP's json_encode). */
+const asciiJson = (text: string): string =>
+  JSON.stringify(text).replace(/[\u0080-￿]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+/** `text` with every character written as a \uXXXX escape: no spelling of it as sent matches. */
+const escapedJson = (text: string): string => `"${[...text].map((ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`).join("")}"`;
+
+/** Everything a library user may log of an error: inspect, message, detail, and the decoded body. */
+function everything(err: unknown): string {
+  let text = inspect(err, { depth: 10, showHidden: true });
+  const e = err as { message?: unknown; detail?: unknown; body?: unknown };
+  text += [e.message, e.detail, e.body].map(String).join("\n");
+  let decoded: unknown;
+  try {
+    decoded = typeof e.body === "string" ? JSON.parse(e.body) : undefined;
+  } catch {
+    // not JSON: the body as sent is all a caller reads
+  }
+  const walk = (v: unknown): void => {
+    if (typeof v === "string") text += `\n${v}`;
+    else if (v !== null && typeof v === "object") {
+      for (const [k, w] of Object.entries(v)) {
+        text += `\n${k}`;
+        walk(w);
+      }
+    }
+  };
+  walk(decoded);
+  return text;
+}
+
+test("a credential echoed with JSON escapes is scrubbed from the message, the detail and the decoded body", async () => {
+  const echoes: Array<[string, string]> = [
+    ["the password, ASCII-only JSON", asciiJson(`wrong password ${ESC_PW}`)],
+    ["the user:password, minimal JSON", JSON.stringify(`bad login alice:${ESC_PW}`)],
+    ["the password, every character escaped", escapedJson(ESC_PW)],
+    ["the request URL as the server decoded it", JSON.stringify(`no access to https://alice:${ESC_PW}@mirror.example/x`)],
+  ];
+  const bodies: Array<[string, (json: string) => string]> = [
+    ["message", (json) => `{"message":${json}}`],
+    ["detail", (json) => `{"detail":${json}}`],
+    ["ArcGIS error", (json) => `{"error":{"code":498,"message":${json},"details":[${json}]}}`],
+  ];
+  for (const status of [401, 500]) {
+    for (const [label, json] of echoes) {
+      for (const [shape, bodyWith] of bodies) {
+        const mt = makeMockTransport(() => rawResponse(bodyWith(json), "application/json", status));
+        const client = new LadesaeulenClient({ baseUrl: ESC_BASE, transport: mt.transport, maxRetries: 0 });
+        const err = await client.stations().then(
+          () => assert.fail("the call should fail"),
+          (caught: unknown) => caught,
+        );
+        assert.ok(err instanceof LadesaeulenApiError && err.message.startsWith(`HTTP ${status} `), `${label}: ${String(err)}`);
+        const seen = everything(err);
+        for (const secret of ESC_SECRETS) assert.ok(!seen.includes(secret), `${status} ${shape} ${label}: ${seen.slice(0, 2000)}`);
+      }
+    }
+  }
+});
+
+test("an ArcGIS envelope on HTTP 200 keeps no escaped credential in its body", async () => {
+  for (const json of [asciiJson(ESC_PW), JSON.stringify(`alice:${ESC_PW}`), escapedJson(ESC_PW)]) {
+    const mt = makeMockTransport(() => rawResponse(`{"error":{"code":400,"message":${json},"details":[]}}`, "application/json"));
+    const client = new LadesaeulenClient({ baseUrl: ESC_BASE, transport: mt.transport });
+    const err = await client.stations().then(
+      () => assert.fail("the envelope should be an error"),
+      (caught: unknown) => caught,
+    );
+    assert.ok(err instanceof LadesaeulenApiError && err.arcgisCode === 400, String(err));
+    const seen = everything(err);
+    for (const secret of ESC_SECRETS) assert.ok(!seen.includes(secret), `${json}: ${seen.slice(0, 2000)}`);
+  }
+});
+
+test("an error body keeps its spelling unless a credential hides behind an escape", async () => {
+  const base = "https://alice:s3cret-pw@mirror.example";
+  const bodyOf = async (body: string): Promise<string> => {
+    const e = new RequestEngine({ baseUrl: base, transport: async () => rawResponse(body, "application/json", 500), maxRetries: 0 });
+    const err = await e.getJson("/x").catch((caught: unknown) => caught);
+    assert.ok(err instanceof LadesaeulenApiError, String(err));
+    return err.body;
+  };
+  // No credential, or one spelled as sent: the body as sent (scrubbed), escapes kept.
+  assert.equal(await bodyOf('{"m":"caf\\u00e9 \\"x\\""}'), '{"m":"caf\\u00e9 \\"x\\""}');
+  assert.equal(await bodyOf('{"m":"pw s3cret-pw \\u00e9"}'), '{"m":"pw *** \\u00e9"}');
+  // Escaped: written again decoded, scrubbed in that spelling.
+  assert.equal(await bodyOf('{"m":"pw s3cret\\u002dpw \\u00e9"}'), '{"m":"pw *** é"}');
+  // Not JSON: nobody decodes it, it stays as sent.
+  assert.equal(await bodyOf("pw s3cret\\u002dpw"), "pw s3cret\\u002dpw");
+  // Deeply nested: written again where this runtime can, else left out (probed, not assumed:
+  // whether JSON.stringify recurses depends on the Node version).
+  const deep = `${"[".repeat(200_000)}"s3cret\\u002dpw"${"]".repeat(200_000)}`;
+  let parses = true;
+  let writes = true;
+  try {
+    const value: unknown = JSON.parse(deep);
+    try {
+      JSON.stringify(value);
+    } catch {
+      writes = false;
+    }
+  } catch {
+    parses = false;
+  }
+  if (parses) {
+    const body = await bodyOf(deep);
+    assert.ok(!body.includes("s3cret"), body.slice(199_990, 200_030));
+    assert.equal(body === "", !writes);
+  }
+});
+
+test("a value quoted from an answer is scrubbed before it is cut, so no part of a credential stays", () => {
+  const pw = "s3cret-Pw-long";
+  const e = new RequestEngine({ baseUrl: `https://alice:${pw}@mirror.example` });
+  for (const at of [0, 490, 495, 499]) {
+    const quoted = e.quoteServerValue(`${"x".repeat(at)}${pw}${"y".repeat(600)}`);
+    assert.ok(!quoted.includes("s3cret"), `${at}: ${quoted}`);
+  }
+  assert.equal(new RequestEngine().quoteServerValue("a\"b"), '"a\\"b"');
 });

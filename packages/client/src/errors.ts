@@ -280,7 +280,12 @@ export class LadesaeulenApiError extends LadesaeulenError {
   /** The request URL, userinfo redacted (`https://***@host/…`). */
   readonly url: string;
   readonly method: string;
-  /** The response body as text (the base URL's credentials scrubbed by the engine). */
+  /**
+   * The response body as text, the base URL's credentials scrubbed by the engine (for the ArcGIS
+   * envelope on HTTP 200: the decoded envelope written again). A JSON body that spells one with
+   * escapes (`\"`, `\u00e4`) is kept as its decoded JSON written again, scrubbed; a body too
+   * large to be a string, or too deeply nested to write again, is left out ("").
+   */
   readonly body: string;
   /** How many times the engine retried the request before giving up (0 when it did not). */
   readonly retries: number;

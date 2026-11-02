@@ -234,7 +234,12 @@ replaced was quadratic on a long `a.a.…` run in an answer and ran past `--time
   entry) is scrubbed before it is joined and cut at 500 characters (`describeArcGisError`'s
   `scrub`), so the cut never splits a password into a prefix no exact string matches; a value a
   shape error quotes from a 2xx answer (the GeoJSON `type`) is quoted with
-  `RequestEngine.quoteServerValue`, scrubbed before the cut. `apps/cli/test/conformance-p2-library-redaction.test.ts`
+  `RequestEngine.quoteServerValue`, scrubbed before the cut. Text decoded from a JSON error body
+  (`message`, `detail`, the ArcGIS `error`) is scrubbed again after `JSON.parse`, since an escape
+  (`\"`, `\u00e4`) hides an echoed password from the scrub of the body as sent; and `.body` keeps the
+  body as sent unless it is JSON whose decoded text still holds an echoed form, in which case it is
+  that JSON written again (`JSON.stringify`) with the form scrubbed (`scrubBody`; `""` for one too
+  deep to write again). The echoed forms are matched percent-encoded too. `apps/cli/test/conformance-p2-library-redaction.test.ts`
   checks the client, nine failing transports and five rejected base URLs.
   Wrong-typed arguments are a `LadesaeulenValidationError` too, never a raw
   `TypeError`: a query that is not an object (`null`/`undefined` mean `{}`), options

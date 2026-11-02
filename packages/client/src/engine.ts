@@ -264,6 +264,18 @@ export function isBidiControl(code: number): boolean {
 }
 
 /**
+ * `form` and its spelling in a URL (`encodeURIComponent`): a server that puts a credential into
+ * a URL percent-encodes it. A form that has no such spelling (a lone surrogate) is kept as it is.
+ */
+function urlSpellings(form: string): string[] {
+  try {
+    return [form, encodeURIComponent(form)];
+  } catch {
+    return [form];
+  }
+}
+
+/**
  * The human-readable text of an ArcGIS `error` value, for an error message: a bare
  * string as is, or an `{code, message, details}` object's `message` and `details`
  * joined with "; ". Empty parts and repeats are dropped (the live server sends
@@ -439,8 +451,8 @@ export class RequestEngine {
   readonly #credentials: string[];
   /**
    * The forms a server echoes that userinfo back in (the Basic value, the decoded
-   * `user:password`, the password alone), longest first, so a password never leaves half
-   * of the `user:password` around it.
+   * `user:password`, the password alone), each also percent-encoded as in a URL, longest
+   * first, so a password never leaves half of the `user:password` around it.
    */
   readonly #echoed: string[];
   private readonly transport: Transport;
@@ -472,9 +484,10 @@ export class RequestEngine {
         return [raw];
       }
     });
-    this.#echoed = credentialsIn(this.#baseUrl)
-      .flatMap(echoedCredentialForms)
-      .sort((a, b) => b.length - a.length);
+    // Each form also percent-encoded, as a server that puts it into a URL spells it.
+    this.#echoed = [...new Set(credentialsIn(this.#baseUrl).flatMap(echoedCredentialForms).flatMap(urlSpellings))].sort(
+      (a, b) => b.length - a.length,
+    );
     if (options.transport !== undefined && typeof options.transport !== "function") {
       throw new LadesaeulenValidationError(`Invalid transport: expected a function, got ${typeof options.transport}.`);
     }
@@ -556,6 +569,32 @@ export class RequestEngine {
   }
 
   /**
+   * An error body, already scrubbed as sent, as `LadesaeulenApiError.body` keeps it: when it is
+   * JSON with an escape in it, checked decoded too. An escape (`\"`, `\u00e4`) hides an echoed
+   * credential from the scrub of the text as sent, while a caller who parses the body sees it. Such
+   * a body is kept as the decoded JSON written again (`JSON.stringify`, one spelling per character)
+   * with the credential scrubbed in that spelling. A body that doesn't parse is text nobody
+   * decodes, and stays as sent; one too deeply nested to write again is left out.
+   */
+  private scrubBody(scrubbed: string): string {
+    if (this.#echoed.length === 0 || !scrubbed.includes("\\")) return scrubbed;
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(scrubbed);
+    } catch {
+      return scrubbed;
+    }
+    let rewritten: string;
+    try {
+      rewritten = JSON.stringify(decoded);
+    } catch {
+      return "";
+    }
+    const spelled = this.#echoed.map((form) => JSON.stringify(form).slice(1, -1));
+    return spelled.some((form) => rewritten.includes(form)) ? redactSecrets(rewritten, spelled) : scrubbed;
+  }
+
+  /**
    * A value from an answer quoted for an error message (`quoteValue`), the base URL's credentials
    * scrubbed first, before the cut: a 2xx answer (a shape the client refuses) can echo them as
    * well as an error body. API code quotes server values with this.
@@ -599,7 +638,8 @@ export class RequestEngine {
     return new LadesaeulenApiError({
       url: target.url,
       method: target.method,
-      body: this.scrub(JSON.stringify(envelope)),
+      // The envelope was decoded: written again, a credential with a quote in it is `\"`.
+      body: this.scrubBody(this.scrub(JSON.stringify(envelope))),
       arcgisCode: typeof e.code === "number" ? e.code : undefined,
       ...(detail === undefined ? {} : { detail }),
     });
@@ -857,7 +897,9 @@ export class RequestEngine {
         message?: unknown;
         detail?: unknown;
       };
-      const arcgis = parsed?.error ? describeArcGisError(parsed.error) : undefined;
+      // The decoded text is scrubbed again: a JSON escape hid the credential from the scrub of
+      // the body as sent (describeArcGisError scrubs each part before it cuts).
+      const arcgis = parsed?.error ? describeArcGisError(parsed.error, (t) => this.scrub(t)) : undefined;
       if (arcgis !== undefined) detail = arcgis;
       else if (typeof parsed?.message === "string") detail = parsed.message;
       else if (typeof parsed?.detail === "string") detail = parsed.detail;
@@ -869,17 +911,18 @@ export class RequestEngine {
         detail = snippet.length > 200 ? `${cutText(snippet, 200)}…` : snippet;
       }
     }
-    // `detail` came from the attacker-controlled response body; strip control
+    // `detail` came from the attacker-controlled response body, decoded: scrubbed again (a JSON
+    // escape hid the credential from the scrub above), before it is cut; then strip control
     // characters so a hostile endpoint cannot drive terminal escape sequences
     // into stderr via the error message.
     // ... and cut it, so a hostile or buggy body cannot flood stderr with one huge line
     // (LadesaeulenApiError.body keeps the full text).
-    if (detail !== undefined) detail = cutForMessage(sanitizeServerText(detail));
+    if (detail !== undefined) detail = cutForMessage(sanitizeServerText(this.scrub(detail)));
     return new LadesaeulenApiError({
       status,
       url,
       method,
-      body: text,
+      body: this.scrubBody(text),
       detail,
       retries: retry.retries,
       ...(retry.retryAfterMs === undefined ? {} : { retryAfterMs: retry.retryAfterMs, maxRetryAfterMs: MAX_RETRY_AFTER_MS }),
