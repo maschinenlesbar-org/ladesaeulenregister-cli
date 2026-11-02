@@ -105,6 +105,23 @@ test("a number a double carries (a decimal fraction below 2^53 too) passes; a nu
   assert.deepEqual(await e.getJson("/0/query"), JSON.parse(body));
 });
 
+test("a number with a long run of zeros is refused in linear time (security audit 2026-10-27, A)", async () => {
+  // 1.<100 000 zeros>1e300 took about 15 s with the trailing-zero regex /0+$/; the check runs
+  // once the answer is in, outside --timeout. The linear check takes milliseconds.
+  const body = `{"n":1.${"0".repeat(100_000)}1e300}`;
+  const mt = makeMockTransport(() => rawResponse(body, "application/json"));
+  const e = new RequestEngine({ transport: mt.transport });
+  const start = performance.now();
+  const err = await e.getJson("/0/query").then(
+    () => assert.fail("the answer should be refused"),
+    (caught: unknown) => caught,
+  );
+  const ms = performance.now() - start;
+  assert.ok(ms < 1000, `${Math.round(ms)} ms`);
+  assert.ok(err instanceof LadesaeulenParseError && /cannot be represented exactly/.test(err.message), String(err));
+  assert.ok(err.message.length < 1000, "the message quotes the literal cut");
+});
+
 test("a non-2xx surfaces as a LadesaeulenApiError with the parsed error.message", async () => {
   const mt = makeMockTransport(() => jsonResponse({ error: { message: "kaputt" } }, 400));
   const e = new RequestEngine({ transport: mt.transport });
