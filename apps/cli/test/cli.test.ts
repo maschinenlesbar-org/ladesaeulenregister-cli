@@ -570,3 +570,14 @@ test("stdout redaction still hides a URL's userinfo the exact secrets don't matc
     cli.out.join("\n"),
   );
 });
+
+test("stdout redaction hides the userinfo of a URL glued onto the one before it (security audit 2026-10-27, B2)", async () => {
+  // The linear pass read the first URL's authority up to the second `://` and searched on after
+  // it, so the second URL's userinfo reached stdout; the scheme regex it replaced redacted both.
+  const value = "https://host://u:p1@h and https://u:p2@x://v:q3@w";
+  const cli = makeCli(() => jsonResponse({ features: [{ attributes: { Betreiber: value } }] }));
+  assert.equal(await run(["--base-url", "https://alice:s3cret-Pw@mirror.example/FeatureServer", "--compact", "stations"], cli.deps), 0, cli.err.join("\n"));
+  const out = cli.out.join("\n");
+  assert.ok(out.includes("https://host://***@h and https://***@x://***@w"), out);
+  for (const secret of ["u:p1", "u:p2", "v:q3"]) assert.ok(!out.includes(secret), out);
+});
