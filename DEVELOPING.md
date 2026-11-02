@@ -216,7 +216,9 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   bidi characters is matched in its raw form. The forms a server echoes a userinfo back
   in are replaced too: the `Basic` value and the decoded `user:password` on stdout and
   stderr, the password alone (4 characters or more) on stderr only, since it may well
-  occur in the data. `redactUrl` falls back to
+  occur in the data. Behind the exact strings, every text gets a pattern backstop for the userinfo
+of any URL in it (`redactUrlUserinfo`, the client's `errors.ts`), one linear pass: the regex it
+replaced was quadratic on a long `a.a.…` run in an answer and ran past `--timeout`. `redactUrl` falls back to
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
   `apps/cli/test/conformance-p1-cli-redaction.test.ts` checks ten passwords, seven URL shapes and
   nine argv positions (the schemeless shape as the `--base-url` value only).

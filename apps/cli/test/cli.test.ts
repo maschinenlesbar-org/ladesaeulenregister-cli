@@ -546,3 +546,27 @@ for (const [what, big] of [
     assert.ok(took < 1000, `${what} took ${Math.round(took)} ms`);
   });
 }
+
+// Security audit 2026-10-27, B: with a URL with userinfo in argv, every stdout text is redacted
+// after the answer arrived, outside --timeout. The scheme regex this replaces was quadratic on a
+// long run of `a.a.…` (200 000 characters took about 8 s); the linear pass takes milliseconds.
+test("the CLI's redaction of stdout is linear in the answer", async () => {
+  const value = "a.".repeat(100_000);
+  const cli = makeCli(() => jsonResponse({ features: [{ attributes: { Betreiber: value } }] }));
+  const start = performance.now();
+  const code = await run(["--base-url", "https://alice:s3cret-Pw@mirror.example/FeatureServer", "--compact", "stations"], cli.deps);
+  const ms = performance.now() - start;
+  assert.equal(code, 0, cli.err.join("\n"));
+  assert.ok(cli.out.join("\n").includes(value));
+  assert.ok(ms < 1500, `${Math.round(ms)} ms`);
+});
+
+test("stdout redaction still hides a URL's userinfo the exact secrets don't match", async () => {
+  const echoed = "see -https://u:p@h/x and x-ftp://v@w?q, mail@example.org; 1://u:p@h https://h/p?u=a@b";
+  const cli = makeCli(() => jsonResponse({ features: [{ attributes: { Betreiber: echoed } }] }));
+  assert.equal(await run(["--base-url", "https://alice:s3cret-Pw@mirror.example/FeatureServer", "--compact", "stations"], cli.deps), 0);
+  assert.ok(
+    cli.out.join("\n").includes("see -https://***@h/x and x-ftp://***@w?q, mail@example.org; 1://u:p@h https://h/p?u=a@b"),
+    cli.out.join("\n"),
+  );
+});
