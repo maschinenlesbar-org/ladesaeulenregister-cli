@@ -207,7 +207,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   reads the URL as text reaches the same host. `credentialsIn` reads the userinfo where WHATWG
   does: after any slashes and backslashes a special scheme skips, up to a `\` too.
   `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
-  transport's per-hop scheme check and real transport failures.
+  transport's per-hop scheme check and real transport failures. That check's messages
+  (`Invalid URL: …`, `Unsupported protocol … in URL: …`) quote the URL with its userinfo
+  redacted, also for one a library caller hands `nodeHttpTransport` without its scheme
+  (`user:pw@host`, `TOKEN:@host`, read as if it had one), and name the scheme only when the URL
+  spells `<scheme>://` (a scheme-less `TOKEN:@host` parses with the token as its scheme).
   **The CLI redacts credentials on output:** `run.ts` (`redactionFor`, `withRedactedOutput`) takes the
   exact userinfo of every URL in every argument (`credentialsIn`, exported, on the argument and
   on the rest of it from wherever a scheme starts inside it, `urlsWithin`, linear: each `://` found with
