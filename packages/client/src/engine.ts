@@ -516,7 +516,10 @@ export class RequestEngine {
     }
     // Checked raw, before the trailing-slash strip (see validateBaseUrl).
     this.#baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
-    this.#credentials = credentialsIn(this.#baseUrl).flatMap((raw) => {
+    // The userinfo as typed and as sent (WHATWG percent-encodes some of its characters: a typed
+    // `p"ä` goes out as `p%22%C3%A4`, which a server echoing the request URL repeats).
+    const userinfos = [...new Set([...credentialsIn(this.#baseUrl), ...credentialsIn(new URL(this.#baseUrl).href)])];
+    this.#credentials = userinfos.flatMap((raw) => {
       try {
         return [raw, decodeURIComponent(raw)];
       } catch {
@@ -524,7 +527,7 @@ export class RequestEngine {
       }
     });
     // Each form also percent-encoded, as a server that puts it into a URL spells it.
-    this.#echoed = [...new Set(credentialsIn(this.#baseUrl).flatMap(echoedCredentialForms).flatMap(urlSpellings))].sort(
+    this.#echoed = [...new Set(userinfos.flatMap(echoedCredentialForms).flatMap(urlSpellings))].sort(
       (a, b) => b.length - a.length,
     );
     if (options.transport !== undefined && typeof options.transport !== "function") {
@@ -882,7 +885,7 @@ export class RequestEngine {
   async getJson<T>(path: string, query?: QueryParams): Promise<T> {
     const res = await this.request(path, query);
     const request = this.describeRequest(path, query);
-    const decoded = decodeBody(res.data, res.contentType, request);
+    const decoded = decodeBody(res.data, res.contentType, request, (text) => this.scrub(text));
     if (res.status === 204 || decoded.text.trim().length === 0) {
       return null as T;
     }
@@ -896,7 +899,8 @@ export class RequestEngine {
       // An HTML maintenance or proxy page is the usual non-JSON answer: name its type,
       // so it reads as an upstream problem rather than a client bug.
       const type = res.contentType.split(";")[0]?.trim() ?? "";
-      const hint = type !== "" && !/json/i.test(type) ? ` (expected JSON, got Content-Type "${cutForMessage(sanitizeServerText(type))}")` : "";
+      // The Content-Type is server text: scrubbed, cleaned and cut.
+      const hint = type !== "" && !/json/i.test(type) ? ` (expected JSON, got Content-Type "${cutForMessage(sanitizeServerText(this.scrub(type)))}")` : "";
       throw new LadesaeulenParseError(`${request}: the answer is not valid JSON${hint}.`, { cause });
     }
     // JSON.parse rounds and overflows numbers silently: refuse the answer rather than hand
@@ -978,15 +982,21 @@ export class RequestEngine {
  * unknown charset label is a LadesaeulenParseError naming `request` (`<METHOD> <url>`, as
  * `RequestEngine.describeRequest` gives it). Bytes that are not valid in the charset become
  * U+FFFD, and `replaced` counts them: exactly for UTF-8 and the single-byte charsets; for
- * UTF-16 a U+FFFD the server sent counts too.
+ * UTF-16 a U+FFFD the server sent counts too. `scrub` (the engine passes its scrub of the base
+ * URL's credentials) runs on the charset a refusal quotes, before it is cleaned and cut.
  */
-export function decodeBody(body: Buffer, contentType: string, request: string): { text: string; replaced: number } {
+export function decodeBody(
+  body: Buffer,
+  contentType: string,
+  request: string,
+  scrub: (text: string) => string = (text) => text,
+): { text: string; replaced: number } {
   const charset = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1] ?? "utf-8";
   let decoder: TextDecoder;
   try {
     decoder = new TextDecoder(charset, { fatal: true });
   } catch {
-    throw new LadesaeulenParseError(`${request}: unsupported response charset "${cutForMessage(sanitizeServerText(charset))}".`);
+    throw new LadesaeulenParseError(`${request}: unsupported response charset "${cutForMessage(sanitizeServerText(scrub(charset)))}".`);
   }
   try {
     return { text: decoder.decode(body), replaced: 0 };

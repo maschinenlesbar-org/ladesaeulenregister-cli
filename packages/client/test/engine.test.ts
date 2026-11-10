@@ -1104,3 +1104,27 @@ test("scanNumbers quotes millions of declared members within a small heap", STAR
   const out = execFileSync(process.execPath, ["--max-old-space-size=128", "--input-type=module", "-e", script], { encoding: "utf8" });
   assert.equal(out, String(n * 10 + 1));
 });
+
+test("an echo of the request URL as sent is scrubbed, a short password too", async () => {
+  // Typed raw; WHATWG sends `p%22%C3%A4` in the URL, which a server echoes.
+  const e = new RequestEngine({
+    baseUrl: 'https://alice:p"ä@mirror.example',
+    transport: async (req) => rawResponse(JSON.stringify({ message: `no access: ${req.url}` }), "application/json", 403),
+  });
+  const err = await e.getJson("/x").catch((caught: unknown) => caught);
+  assert.ok(err instanceof LadesaeulenApiError, String(err));
+  for (const text of [err.message, err.detail ?? "", err.body]) {
+    assert.ok(!text.includes("p%22%C3%A4@") && !text.includes('p"ä@'), text);
+  }
+});
+
+test("a Content-Type or charset a parse error quotes is scrubbed of the base URL's credentials", async () => {
+  const pw = "s3cret-Pw";
+  const base = `https://alice:${pw}@mirror.example`;
+  for (const contentType of [`text/html-${pw}`, `application/json; charset=x-${pw}`]) {
+    const e = new RequestEngine({ baseUrl: base, transport: async () => rawResponse("<html>", contentType, 200) });
+    const err = await e.getJson("/x").catch((caught: unknown) => caught);
+    assert.ok(err instanceof LadesaeulenParseError, String(err));
+    assert.ok(!err.message.includes(pw) && err.message.includes("***"), err.message);
+  }
+});
