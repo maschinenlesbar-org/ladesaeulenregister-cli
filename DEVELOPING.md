@@ -154,7 +154,9 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `HttpRequest.signal`, that fires then, and the call rejects at the deadline whether
   the transport stops or not); `maxResponseBytes` is checked on the body it returns
   (`GET <url> failed: Response exceeded the size limit of N bytes (maxResponseBytes;
-  --max-response-bytes on the CLI)`); headers may come as a plain record in any case, a `Headers` object or
+  --max-response-bytes on the CLI)`; the default transport joins small chunks as they arrive,
+  every 1024 chunks or 64 KiB, so its memory follows the bytes of an answer, not the number of
+  chunks a server splits it into); headers may come as a plain record in any case, a `Headers` object or
   a `Map`; the body may be a `Buffer`, any `ArrayBuffer` view or an `ArrayBuffer` (from
   any realm). Whatever else a transport throws or returns — a plain `Error`, a string,
   `null`, a response without a valid status — becomes a `LadesaeulenNetworkError`
@@ -421,7 +423,8 @@ checks that every stderr line is a log record and `--log-format text|jsonl`.
 P27 (`conformance-p27-big-and-odd-answers`, fix round 2026-10-21) runs the built bin under a
 small heap: a large flat answer prints with `--compact`, an answer full of DEL characters prints
 escaped or, past V8's longest string, is one ERROR record; and a lone surrogate or invalid bytes
-are replaced with U+FFFD and reported in a WARN record, on the CLI and in the library. The kit rollout
+are replaced with U+FFFD and reported in a WARN record, on the CLI and in the library; an answer
+in two million one-byte chunks (a raw TCP answer) is read within a 256 MB heap. The kit rollout
 of 2026-10-21 added P24 (`conformance-p24-input-corpus`: an input is canonicalised or refused,
 never sent raw: the text inputs are `--where` of `stations` and `count-by`, the tokens
 `--order-by` and the `count-by` field, the list `--fields`; no id goes into a path. The adapter
