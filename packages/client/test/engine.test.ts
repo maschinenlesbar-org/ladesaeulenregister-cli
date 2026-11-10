@@ -21,6 +21,7 @@ import {
   LadesaeulenValidationError,
   TextBuilder,
   cutText,
+  echoedCredentialForms,
   redactUrlUserinfo,
   toWellFormed,
 } from "../src/errors.js";
@@ -1126,5 +1127,30 @@ test("a Content-Type or charset a parse error quotes is scrubbed of the base URL
     const err = await e.getJson("/x").catch((caught: unknown) => caught);
     assert.ok(err instanceof LadesaeulenParseError, String(err));
     assert.ok(!err.message.includes(pw) && err.message.includes("***"), err.message);
+  }
+});
+
+test("echoedCredentialForms treats a userinfo without a password as a token (Basic `TOKEN:`)", () => {
+  const basic = (pair: string): string => Buffer.from(pair, "utf8").toString("base64");
+  assert.deepEqual(echoedCredentialForms("alice:s3cret"), [basic("alice:s3cret"), "alice:s3cret", "s3cret"]);
+  assert.deepEqual(echoedCredentialForms("T0ken"), [basic("T0ken:"), "T0ken:", "T0ken"]);
+  assert.deepEqual(echoedCredentialForms("T0ken:"), [basic("T0ken:"), "T0ken:", "T0ken"]);
+  assert.deepEqual(echoedCredentialForms("T%C3%B6k"), [basic("Tök:"), "Tök:"]); // short: not alone
+  assert.deepEqual(echoedCredentialForms(":pw12"), [basic(":pw12"), ":pw12", "pw12"]);
+  assert.deepEqual(echoedCredentialForms(""), []);
+  assert.deepEqual(echoedCredentialForms(":"), []);
+});
+
+test("a token userinfo (no password) is scrubbed from library errors in every echoed form", async () => {
+  const token = "T0kenS3cret";
+  const basic = Buffer.from(`${token}:`, "utf8").toString("base64");
+  for (const baseUrl of [`https://${token}@mirror.example`, `https://${token}:@mirror.example`]) {
+    for (const echo of [`bad token ${token}`, `Authorization: Basic ${basic}`, `user ${token}: unknown`]) {
+      const e = new RequestEngine({ baseUrl, maxRetries: 0, transport: async () => jsonResponse({ error: { code: 498, message: echo } }, 401) });
+      const err = await e.getJson("/0/query").catch((caught: unknown) => caught);
+      assert.ok(err instanceof LadesaeulenApiError, String(err));
+      const seen = [err.message, err.detail ?? "", err.body, inspect(err)].join("\n");
+      assert.ok(!seen.includes(token) && !seen.includes(basic), `${baseUrl} ${echo}: ${seen}`);
+    }
   }
 });

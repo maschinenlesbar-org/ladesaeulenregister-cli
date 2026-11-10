@@ -216,7 +216,8 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   bidi characters is matched in its raw form. The forms a server echoes a userinfo back
   in are replaced too: the `Basic` value and the decoded `user:password` on stdout and
   stderr, the password alone (4 characters or more) on stderr only, since it may well
-  occur in the data. Behind the exact strings, every text gets a pattern backstop for the userinfo
+  occur in the data. A userinfo without a password (`https://TOKEN@host`, `TOKEN:@host`) is a
+  token: the user name is the secret, sent as Basic `TOKEN:`, and scrubbed in the same forms. Behind the exact strings, every text gets a pattern backstop for the userinfo
 of any URL in it (`redactUrlUserinfo`, the client's `errors.ts`), one linear pass: the regex it
 replaced was quadratic on a long `a.a.…` run in an answer and ran past `--timeout`. `redactUrl` falls back to
   the same text-based cut (`redactCredentials`) for a value that doesn't parse as a URL.
@@ -229,7 +230,8 @@ replaced was quadratic on a long `a.a.…` run in an answer and ran past `--time
   the POST path alike), and server or transport text that echoes the URL — an error
   body, `detail`, a transport's error message and its `cause` chain — has the userinfo
   (raw and percent-decoded) and the forms a server echoes it back in (the `Basic` value,
-  the decoded `user:password`, the password alone from 4 characters:
+  the decoded `user:password`, the password alone from 4 characters, or for a userinfo
+  without a password the token in its place:
   `echoedCredentialForms`) scrubbed, the userinfo taken both as typed and as WHATWG sends it
   (a typed `p"ä` goes out as `p%22%C3%A4`), each form also percent-encoded. The Content-Type and
   the charset a parse error quotes are scrubbed too (`decodeBody`'s `scrub`). Each part of the ArcGIS envelope (`message`, every `details`
