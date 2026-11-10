@@ -192,12 +192,20 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   `assertHeaderValue`). `--user-agent` runs the same rule. The default transport
   turns Node's own synchronous header error into a `LadesaeulenNetworkError`.
   The base URL is checked raw, before the trailing-slash strip (`validateBaseUrl`,
-  `baseUrlProblem`): blank, unparsable, not `http:`/`https:`, a query or fragment,
-  surrounding whitespace (the engine appends request paths to the raw string), or a `%`
+  `baseUrlProblem`): blank, unparsable, not `http:`/`https:`, a query or fragment, a
+  backslash (WHATWG ends an http(s) host at `\`, text-based code reads on, so
+  `https://u:pw@a.example\@b.example` was checked as one host and its credentials could go to
+  another), surrounding whitespace, a scheme not followed by exactly `//` and the host
+  (`http:host`, `http:/host`, `http:///host`, which WHATWG repairs silently into another
+  authority than the one typed), or a `%`
   in the user name or password that doesn't start an escape (Node decodes the userinfo
   for the Authorization header and failed at request time with "URI malformed", exit 6;
   a literal `%` is `%25`) is a
-  `LadesaeulenValidationError` (`Invalid baseUrl: …`), not a network error.
+  `LadesaeulenValidationError` (`Invalid baseUrl: …`), not a network error. The engine then
+  requests the base URL as WHATWG parses it (`new URL(…).href`, trailing slashes stripped: the
+  host lower-cased, a default port dropped), the reading every check makes, so a transport that
+  reads the URL as text reaches the same host. `credentialsIn` reads the userinfo where WHATWG
+  does: after any slashes and backslashes a special scheme skips, up to a `\` too.
   `--base-url` runs the same rule. `LadesaeulenNetworkError` stays for the default
   transport's per-hop scheme check and real transport failures.
   **The CLI redacts credentials on output:** `run.ts` (`redactionFor`, `withRedactedOutput`) takes the

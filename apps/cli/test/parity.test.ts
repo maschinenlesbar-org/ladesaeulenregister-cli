@@ -336,14 +336,24 @@ test("baseUrlProblem names every malformed shape with the CLI's wording", () => 
     ["file:///etc/x", "Only http: and https: base URLs are supported."],
     ["https://h.example/fs?x=1", "A base URL cannot have a query (?) or fragment (#)."],
     ["https://h.example/fs#f", "A base URL cannot have a query (?) or fragment (#)."],
+    // WHATWG ends an http(s) host at a backslash, and repairs a scheme not followed by "//".
+    ["https://alice:pw@api.example\\@evil.example", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["https://api.example\\evil", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["https:\\\\h.example", 'A base URL cannot contain a backslash (\\); write "/" instead.'],
+    ["http:h.example/fs", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["http:/h.example/fs", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["http:///h.example/fs", 'Expected an absolute http(s) URL ("https://" and the host).'],
+    ["HTTPS:h.example/fs", 'Expected an absolute http(s) URL ("https://" and the host).'],
   ];
   for (const [raw, reason] of cases) assert.equal(baseUrlProblem(raw), reason, JSON.stringify(raw));
+  // A spelling the parser keeps as typed stays accepted: an upper-case scheme, an explicit port.
+  for (const raw of ["HTTPS://h.example/fs", "http://alice:pw@h.example:8080/fs"]) assert.equal(baseUrlProblem(raw), undefined, raw);
   assert.equal(baseUrlProblem(42 as unknown as string), "Expected a string, got 42.");
   assert.equal(baseUrlProblem("http://127.0.0.1:1/mirror/fs/"), undefined);
 });
 
 test("parity: a malformed base URL is rejected by both as a validation error, no request", async () => {
-  for (const baseUrl of ["ftp://example.org/fs", "https://h.example/fs?x=1", "https://h.example/fs#f", "not a url", "", "   ", "file:///etc/x"]) {
+  for (const baseUrl of ["ftp://example.org/fs", "https://h.example/fs?x=1", "https://h.example/fs#f", "not a url", "", "   ", "file:///etc/x", "https://h.example\\fs", "http:///h.example/fs"]) {
     const { cli, lib: res } = await parity(
       ["--compact", "--base-url", baseUrl, "stations", "--count"],
       (transport) => new LadesaeulenClient({ baseUrl, transport }).count(),
@@ -378,4 +388,38 @@ test("parity: count-by with a field that is no single column name is a usage err
   assert.equal(res.ok, false);
   assert.ok(!res.ok && res.error instanceof LadesaeulenValidationError);
   assert.equal(res.requests.length, 0);
+});
+
+test("parity: a base URL with a backslash or a repaired scheme never echoes its password, on either side", async () => {
+  for (const baseUrl of [
+    "https://alice:s3cret@api.example\\@evil.example",
+    "http:///alice:s3cret@h.example/fs",
+    "https:\\\\alice:s3cret@h.example",
+    "http:alice:s3cret@h.example",
+    "http:///user:s3cret@h.example/?q=1",
+  ]) {
+    const { cli, lib: res } = await parity(
+      ["--compact", "--base-url", baseUrl, "stations", "--count"],
+      (transport) => new LadesaeulenClient({ baseUrl, transport }).count(),
+    );
+    assert.equal(cli.code, 2, `${baseUrl}: ${cli.err}`);
+    assert.equal(cli.requests.length + res.requests.length, 0);
+    assert.ok(!cli.err.includes("s3cret") && !cli.out.includes("s3cret"), cli.err);
+    assert.ok(!res.ok && !String((res as { error: unknown }).error).includes("s3cret"));
+  }
+});
+
+test("requests go to the base URL as it parses: the host lower-cased, a default port dropped, an @ in the path kept there", async () => {
+  for (const [baseUrl, sent] of [
+    ["https://API.Example:443/fs", "https://api.example/fs/0/query"],
+    ["https://alice:pw@api.example/v1/@evil.example", "https://alice:pw@api.example/v1/@evil.example/0/query"],
+  ] as const) {
+    const { cli, lib: res } = await parity(
+      ["--compact", "--base-url", baseUrl, "stations", "--count"],
+      (transport) => new LadesaeulenClient({ baseUrl, transport }).count(),
+      () => jsonResponse({ count: 42 }),
+    );
+    assert.equal(cli.code, 0, cli.err);
+    for (const req of [...cli.requests, ...res.requests]) assert.equal(req.url.split("?")[0], sent, baseUrl);
+  }
 });

@@ -218,12 +218,16 @@ export const headerNameProblem: Problem<string> = (name) =>
 
 /**
  * A rule for a configured base URL: a non-blank, well-formed `http:`/`https:` URL
- * with no query, fragment or surrounding whitespace. Request paths are appended to
- * the raw string, so a `?` or `#` would swallow every path (`http://h/fs?x=1`
- * requests `/fs?x=1/0/query?...`, `http://h/fs#f` requests `/fs` with no
- * parameters), and surrounding whitespace, which `new URL()` trims silently, would
- * end up in every request URL (`/fs%20/0/query`). A `%` in the user name or password must
- * start a valid escape (`%25` for a literal one). The reasons never echo the value, so a
+ * with no query, fragment, backslash or surrounding whitespace, its scheme followed by
+ * exactly `//` and the host. Request paths are appended to the base URL, so a `?` or `#`
+ * would swallow every path (`http://h/fs?x=1` requests `/fs?x=1/0/query?...`, `http://h/fs#f`
+ * requests `/fs` with no parameters), and surrounding whitespace, which `new URL()` trims
+ * silently, means the URL requested is not the one typed. WHATWG ends an http(s) host at a
+ * backslash, as at a `/`, while text-based code reads on, so `https://u:pw@a.example\@b.example`
+ * would be checked as one host and its credentials sent to another; and it skips any slashes
+ * after `http:` and repairs `http:host`, `http:/host` and `http:///host` into `http://host`
+ * silently: both are refused. A `%` in the user name or password must start a valid escape
+ * (`%25` for a literal one). The reasons never echo the value, nor a part of it, so a
  * credential in it cannot leak into a message.
  */
 export const baseUrlProblem: Problem<string> = (raw) => {
@@ -240,6 +244,7 @@ export const baseUrlProblem: Problem<string> = (raw) => {
     return "Only http: and https: base URLs are supported.";
   }
   if (/[?#]/.test(raw)) return "A base URL cannot have a query (?) or fragment (#).";
+  if (raw.includes("\\")) return 'A base URL cannot contain a backslash (\\); write "/" instead.';
   if (raw !== trimmed) return "A base URL cannot have surrounding whitespace.";
   // Node decodes the userinfo into the Authorization header and throws "URI malformed" for a
   // "%" that isn't an escape — at request time, as a network error (exit 6). Reject it here.
@@ -250,6 +255,9 @@ export const baseUrlProblem: Problem<string> = (raw) => {
       return 'The user name or password has a "%" that is not followed by two hex digits; write a literal "%" as %25.';
     }
   }
+  // WHATWG skips any slashes after "http:" and repairs `http:host`, `http:/host` and
+  // `http:///host` into `http://host` silently: the host requested would not be the one typed.
+  if (!/^https?:\/\/[^/]/i.test(raw)) return 'Expected an absolute http(s) URL ("https://" and the host).';
   return undefined;
 };
 

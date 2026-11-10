@@ -53,8 +53,9 @@ export interface RawResponse {
 export interface EngineOptions {
   /**
    * Base URL of the API. Defaults to the public Ladesäulen ArcGIS FeatureServer.
-   * Checked by `validateBaseUrl`: no surrounding whitespace, http(s) only, no query
-   * or fragment.
+   * Checked by `validateBaseUrl`: no surrounding whitespace, http(s) only, no query,
+   * fragment or backslash, the scheme followed by `//` and the host. Requests go to it as
+   * WHATWG parses it (`https://API.Example:443/fs` is requested as `https://api.example/fs/…`).
    */
   baseUrl?: string | undefined;
   /** Swappable transport. Defaults to the built-in node http/https transport. */
@@ -344,7 +345,8 @@ export function describeArcGisError(error: unknown, scrub: (text: string) => str
  * Check a configured base URL (`baseUrlProblem`) and return it with trailing
  * slashes stripped, or throw a LadesaeulenValidationError (`Invalid baseUrl:
  * <reason>`): blank, surrounding whitespace, unparsable, a scheme other than
- * http(s), a query or a fragment. Runs on the raw value, before the slash strip,
+ * http(s), a query, a fragment, a backslash, or a scheme not followed by `//` and the host.
+ * Runs on the raw value, before the slash strip,
  * so `"https://h/fs/ "` cannot slip past it. The default transport still gates the
  * scheme per hop (a LadesaeulenNetworkError there), but the engine may be handed a
  * custom transport that does no such check, so a `file:`/`ftp:` base URL fails
@@ -515,10 +517,15 @@ export class RequestEngine {
       throw new LadesaeulenValidationError(`Invalid options: expected an object, got ${typeof options}.`);
     }
     // Checked raw, before the trailing-slash strip (see validateBaseUrl).
-    this.#baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
+    const baseUrl = validateBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
+    // Requests go to the base URL as WHATWG parses it, the reading every check of it makes (the
+    // host, the cleartext warning, the Authorization header Node derives), not to a text-based
+    // reading of the string: a transport that reads the URL as text reaches the same host.
+    const href = new URL(baseUrl).href;
+    this.#baseUrl = href.replace(/\/+$/, "");
     // The userinfo as typed and as sent (WHATWG percent-encodes some of its characters: a typed
     // `p"ä` goes out as `p%22%C3%A4`, which a server echoing the request URL repeats).
-    const userinfos = [...new Set([...credentialsIn(this.#baseUrl), ...credentialsIn(new URL(this.#baseUrl).href)])];
+    const userinfos = [...new Set([...credentialsIn(baseUrl), ...credentialsIn(href)])];
     this.#credentials = userinfos.flatMap((raw) => {
       try {
         return [raw, decodeURIComponent(raw)];
