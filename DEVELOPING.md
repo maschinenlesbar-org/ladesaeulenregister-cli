@@ -223,7 +223,9 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   (`user:pw@host`, `TOKEN:@host`, read as if it had one), and name the scheme only when the URL
   spells `<scheme>://` (a scheme-less `TOKEN:@host` parses with the token as its scheme).
   **The CLI redacts credentials on output:** `run.ts` (`redactionFor`, `withRedactedOutput`) takes the
-  exact userinfo of every URL in every argument (`credentialsIn`, exported, on the argument and
+  exact userinfo of every URL in every argument (`credentialsIn`, exported; a base URL is read as a URL however its scheme is typed,
+`typedUrlCredentials`: missing, `alice:pw@host`, or mistyped, `http//alice:pw@host` with the
+colon left out, whose userinfo is everything between the first slashes and the last `@`, on the argument and
   on the rest of it from wherever a scheme starts inside it, `urlsWithin`, linear: each `://` found with
   indexOf, at most 64 URLs per argument: a URL in an SQL literal of `--where`, padded or after a dash; and its percent-encoded form with the `@`, as a
   request URL in an error record carries it; only a URL that starts with a scheme counts, since a bare `a:b@c` is a search text or a User-Agent as
