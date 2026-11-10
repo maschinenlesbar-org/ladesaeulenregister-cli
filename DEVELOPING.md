@@ -25,9 +25,16 @@ node --test apps/cli/dist/test/cli.test.js   # one file, after a build
 
 CI (`ci.yml`) type-checks, builds and tests on Node 22/24/26, then packs the real tarball,
 checks the pack left nothing behind, installs it globally with the registry out of reach and
-runs the bin. `release.yml` (on a `v*` tag, made by `npm run bump`) verifies the tag against
-`apps/cli/package.json`, writes the SBOMs (scoped to the `apps/cli` workspace) and runs
-`npm pack --workspace apps/cli`; `publish.yml` runs `npm publish --workspace apps/cli`.
+runs the bin. `release.yml` (on a `v*` tag, made by `npm run bump`) has three jobs: `pack`
+(read-only: verifies the tag against `apps/cli/package.json`, writes the changelog, tests, runs
+`npm pack --workspace apps/cli` and records the tarball's and the notes' sha256 as job outputs),
+`sbom` (read-only: the CycloneDX SBOMs, scoped to the `apps/cli` workspace, with the tool locked
+in `tools/sbom/` and installed by `npm ci --ignore-scripts --prefix tools/sbom`, never `npx`)
+and `release`, the only one with `contents: write`, which checks the downloaded files against
+those digests and runs nothing but `gh`. To update the SBOM tool, change its version in
+`tools/sbom/package.json` and run `npm install --package-lock-only --ignore-scripts` there;
+don't chain its install into an npm script (the `tools/docs/` rule). `publish.yml` runs
+`npm publish --workspace apps/cli`.
 
 ## Layout
 
@@ -46,6 +53,7 @@ packages/client/     # @maschinenlesbar.org/ladesaeulenregister-client — priva
   test/              # tests that only touch the client, + the transport helpers and fixtures
 tools/pack/          # prepack/postpack: ship the client (dist/node_modules) and commander in the tarball
 tools/bump.mjs       # version bump + commit + tag (npm run bump)
+tools/sbom/          # the CycloneDX SBOM tool, lockfile-pinned, for release.yml's sbom job only
 tsconfig.docs.json   # TypeDoc only: the package entry, with the client read from its sources
 ```
 
