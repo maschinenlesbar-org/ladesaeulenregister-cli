@@ -109,7 +109,8 @@ test("an ArcGIS error envelope with control chars is stripped before it reaches 
         return n <= 8 || (n >= 0x0b && n <= 0x1f) || (n >= 0x7f && n <= 0x9f);
       });
       assert.ok(!hasControl);
-      assert.match(err.message, /bad\[2Jclause/);
+      // The whole escape sequence goes, not only its ESC (`[2J` used to stay).
+      assert.match(err.message, /badclause/);
       assert.match(err.message, /hinthere/);
       return true;
     },

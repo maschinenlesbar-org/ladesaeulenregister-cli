@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
 import { TextDecoder, inspect } from "node:util";
 import assert from "node:assert/strict";
 import {
@@ -7,8 +8,10 @@ import {
   DEFAULT_BASE_URL,
   bigIntegerKeysOption,
   cleartextProblem,
+  describeArcGisError,
   firstInexactNumber,
   parseRetryAfter,
+  sanitizeServerText,
   scanNumbers,
 } from "../src/engine.js";
 import {
@@ -166,7 +169,8 @@ test("a JSON error detail is stripped of terminal control characters", async () 
       assert.ok(err instanceof LadesaeulenApiError);
       assert.ok(!hasControlChars(err.detail ?? ""));
       assert.ok(!hasControlChars(err.message));
-      assert.equal(err.detail, "boom[31mred2J");
+      // Whole escape sequences go, not just their control bytes (`[31m` used to stay).
+      assert.equal(err.detail, "boomred");
       return true;
     },
   );
@@ -1010,4 +1014,93 @@ test("a value quoted from an answer is scrubbed before it is cut, so no part of 
     assert.ok(!quoted.includes("s3cret"), `${at}: ${quoted}`);
   }
   assert.equal(new RequestEngine().quoteServerValue("a\"b"), '"a\\"b"');
+});
+
+test("sanitizeServerText drops whole escape sequences, not just their control bytes", () => {
+  const CSI8 = String.fromCharCode(0x9b);
+  const OSC8 = String.fromCharCode(0x9d);
+  const ST8 = String.fromCharCode(0x9c);
+  for (const [input, expected] of [
+    [`line1 ${ESC}]0;title${BEL}rest`, "line1 rest"],
+    [`${ESC}]8;;https://evil.example${ESC}\\click${ESC}]8;;${ESC}\\`, "click"],
+    [`${ESC}[31mred${ESC}[0m plain`, "red plain"],
+    [`${ESC}[1;31;4mbold`, "bold"],
+    [`${CSI8}2Jcleared`, "cleared"],
+    [`${OSC8}0;t${ST8}ok`, "ok"],
+    [`a${ESC}7b${ESC}(Bc`, "abc"],
+    // Unterminated: only ESC and its introducer go, the text stays.
+    [`keep ${ESC}]0;no terminator here`, "keep 0;no terminator here"],
+  ] as const) {
+    assert.equal(sanitizeServerText(input), expected, JSON.stringify(input));
+  }
+});
+
+test("sanitizeServerText drops invisible format characters (zero-width, soft hyphen, BOM)", () => {
+  const text = "real\u200b error\u2028Error: forged\u2066x\u2069 \ufeffend\u00ad\u200d\u2060!";
+  assert.equal(sanitizeServerText(text), "real error Error: forgedx end!");
+});
+
+test("sanitizeServerText keeps ordinary text, umlauts and single spaces", () => {
+  assert.equal(sanitizeServerText("  Cannot GET  /0/query/  Größe  "), "Cannot GET /0/query/ Größe");
+});
+
+test("sanitizeServerText reads a bounded prefix and drops what the per-character filter dropped", () => {
+  // The filter it replaces, one character at a time: C0 but TAB to CR, DEL, C1 and Cf go.
+  const perCharacter = (text: string): string =>
+    [...text]
+      .filter((ch) => {
+        const n = ch.codePointAt(0) ?? 0;
+        return (n >= 0x09 && n <= 0x0d) || !(n <= 0x1f || (n >= 0x7f && n <= 0x9f) || /\p{Cf}/u.test(ch));
+      })
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim();
+  const every = Array.from({ length: 0x3000 }, (_, i) => String.fromCharCode(i)).join("") + "\u{1f600}\u{e0001}\ud800x";
+  for (let at = 0; at < every.length; at += 512) {
+    const piece = every.slice(at, at + 512).replace(/[\u001b\u0090\u0098\u009b-\u009f]/g, "");
+    assert.equal(sanitizeServerText(piece), perCharacter(piece), `from U+${at.toString(16)}`);
+  }
+  // At most 16 384 units of the text are read, never half a surrogate pair.
+  assert.equal(sanitizeServerText("x".repeat(100_000)).length, 16_384);
+  assert.equal(sanitizeServerText(`${"x".repeat(16_383)}\u{1f600}`), "x".repeat(16_383));
+  // A control string ends at another introducer: the first is dropped by the filter, the second
+  // string as a whole.
+  const OSC8 = String.fromCharCode(0x9d);
+  const ST8 = String.fromCharCode(0x9c);
+  assert.equal(sanitizeServerText(`a${OSC8}0;x${OSC8}0;t${ST8}b`), "a0;xb");
+  assert.equal(sanitizeServerText(`a${ESC}]0;x${ESC}]0;t${BEL}b`), "a0;xb");
+});
+
+test("describeArcGisError reads the parts of an envelope only until the joined text is past its cut", () => {
+  // A million `details` were each cleaned, kept and joined before the 500-character cut.
+  let read = 0;
+  const details = new Proxy(Array.from({ length: 1_000_000 }, (_, i) => `detail ${i} ${"x".repeat(40)}`), {
+    get(target, key, receiver) {
+      if (typeof key === "string" && /^\d+$/.test(key)) read++;
+      return Reflect.get(target, key, receiver) as unknown;
+    },
+  });
+  const text = describeArcGisError({ message: "bad where", details });
+  assert.ok(text !== undefined && text.startsWith("bad where; detail 0 ") && text.endsWith("…") && text.length === 501, text);
+  assert.ok(read < 20, `${read} details read`);
+  // Exactly at the cut: the same text as joining every part first ("…" when more follows).
+  const at500 = ["a".repeat(500), "b"];
+  assert.equal(describeArcGisError({ message: "", details: at500 }), `${"a".repeat(500)}…`);
+  assert.equal(describeArcGisError({ message: "a".repeat(498), details: ["b"] }), `${"a".repeat(498)}; …`);
+  assert.equal(describeArcGisError({ message: "a".repeat(497), details: ["a".repeat(497), "c"] }), `${"a".repeat(497)}; c`);
+});
+
+// This test starts a process with a small heap: 30 s instead of the suite's 5 s.
+const STARTS_A_PROCESS = { timeout: 30_000 };
+
+test("scanNumbers quotes millions of declared members within a small heap", STARTS_A_PROCESS, () => {
+  // One `+=` per quoted member made a rope node each: 3 million of them exhausted a 128 MB heap.
+  const engine = new URL("../src/engine.js", import.meta.url).href;
+  const n = 3_000_000;
+  const script =
+    `const { scanNumbers } = await import(${JSON.stringify(engine)});` +
+    `const json = "[" + '{"k":1},'.repeat(${n - 1}) + '{"k":1}]';` +
+    `process.stdout.write(String(scanNumbers(json, new Set(["k"])).json.length));`;
+  const out = execFileSync(process.execPath, ["--max-old-space-size=128", "--input-type=module", "-e", script], { encoding: "utf8" });
+  assert.equal(out, String(n * 10 + 1));
 });

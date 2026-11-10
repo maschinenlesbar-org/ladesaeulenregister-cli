@@ -87,8 +87,9 @@ writes one JSON object per line instead. A record is always one line: a line bre
 character or a bidi control in a message is written as an escape (`\n`, `\u001b`, `\u202e`),
 so it can neither split a record nor forge another one, nor steer the terminal. A value you
 typed keeps every character, escaped; in a server's text (an ArcGIS error message, an error
-body) the control characters other than tab and line break (ESC, DEL, C1) are removed before
-that, so what a server sends can't drive the terminal even inside an escape. A message longer
+body) whole terminal escape sequences, the other control characters (DEL, C1) and invisible
+format characters are removed before that, and line breaks and runs of whitespace become one
+space, so what a server sends can't drive the terminal even inside an escape. A message longer
 than 4000 characters is cut and ends in `… (N more characters)`:
 
 ```text
