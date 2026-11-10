@@ -443,6 +443,23 @@ station's latitude). P26 (`conformance-p26-output-integrity`) runs with `HAS_OUT
 false`: the CLI has no `-o`, so only its stdout case runs (stdout redirected to a file and cut
 short under `ulimit -f` is exit 1 with an ERROR record of `ladesaeulen.output`).
 
+The security audit of 2026-10-27 added P28–P31 (reference `create-cli-template`, bodies
+verbatim, adapter on top). P28 (`conformance-p28-hostile-error-answers`) runs `stations --geojson`
+/ `geojson()`: a number with a long run of zeros and an error answer of unterminated
+control-string introducers are refused or cleaned in linear time; a 16 MB ArcGIS error message
+ends in one ERROR record and six million lone-surrogate escapes are repaired, each in the bin
+under a 128 MB heap; the base URL's credential, echoed with JSON escapes in an ArcGIS envelope,
+in the GeoJSON `type` a shape error quotes (`quotedBody`) or in a redirect's Location, reaches no
+message, detail or decoded body (`REDIRECT_ERROR` is `HTTP 302`: no redirect is followed or its
+Location quoted). P29 (`conformance-p29-base-url-credentials`, on `stations`): a token userinfo is
+scrubbed in every echoed form, a backslash or a repaired scheme in `--base-url` is refused
+without echoing the password, requests go to the parsed host, and the CLI's stdout redaction is
+linear and covers glued URLs. P30 (`conformance-p30-output-links`) runs with `HAS_OUTPUT_OPTION =
+false`, every case skipped (no `-o`; stand-ins for `nodeFilesFor` and `run`). P31
+(`conformance-p31-release-pipeline`) reads `release.yml` and `tools/sbom/`. P27's and P28's bin
+runs and the client's small-heap `scanNumbers` test start a process and get 30 s
+(`STARTS_A_PROCESS`).
+
 ## Conventions to keep
 
 - **Zero runtime HTTP deps**; strict TS + ESM; passes on Node 22/24/26 (`engines` `>=22.12`, the floor of the pinned `commander`).
