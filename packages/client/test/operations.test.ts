@@ -73,7 +73,7 @@ test("searchStations pages: total is every match, nextOffset where the next page
   const before = api.calls.length;
   const count = await searchStations(client, { place: "Köln", limit: 0 }, { now: NOW });
   assert.deepEqual([count.total, count.stations, count.nextOffset], [4, [], undefined]);
-  assert.equal(api.calls.length - before, 2, "the count and the layer's date, no page");
+  assert.equal(api.calls.length - before, 3, "the count, the layer's date and the places that contain the name; no page");
 });
 
 test("searchStations by power per charge point: the station sum doesn't count (Jolt's 2 x 160 reads 320), fastest first", async () => {
@@ -93,6 +93,25 @@ test("searchStations: a place is the whole name; empty names what was searched a
   const none = await searchStations(client, { place: "Atlantis" }, { now: NOW });
   assert.equal(none.suggestions, undefined);
   assert.match(none.reason ?? "", /No place's name contains "Atlantis"/);
+});
+
+test("searchStations: a place found under its whole name still names the other places that contain it (Frankfurt am Main is also under Frankfurt)", async () => {
+  const rows = [...registerRows(), stationRow(80002, "1400002", { Ort: "Frankfurt", state: "Hessen" }), stationRow(80003, "1400003", { Ort: "Frankfurt (Oder)", state: "Brandenburg" })];
+  const result = await searchStations(clientOf(registerApi({ rows })).client, { place: "frankfurt" }, { now: NOW });
+  assert.deepEqual([result.status, result.total], ["ok", 1]);
+  assert.match(result.notes[0] ?? "", /other places contain it: Frankfurt am Main \(1\), Frankfurt \(Oder\) \(1\)\. For a whole city, district/);
+  const counts = await countStationsBy(clientOf(registerApi({ rows })).client, { groupBy: "state", place: "Frankfurt" }, { now: NOW });
+  assert.match(counts.notes[0] ?? "", /other places contain it/);
+});
+
+test("findStationsNear marks a station whose address is in another state than nearly all around it: its coordinates may be wrong", async () => {
+  const berlin = Array.from({ length: 20 }, (_, i) => stationRow(100 + i, `b${i}`, { coordinates_latitude: 52.5163 + (i + 1) / 2000, coordinates_longitude: 13.3777 }));
+  const dueren = stationRow(99, "1128389", { Ort: "Düren", state: "Nordrhein-Westfalen", coordinates_latitude: 52.516181, coordinates_longitude: 13.376935 });
+  const near = await findStationsNear(clientOf(registerApi({ rows: [...berlin, dueren] })).client, { lat: 52.5163, lon: 13.3777, radiusKm: 2, limit: 3 }, { now: NOW });
+  assert.deepEqual(near.nearest.map((s) => [s.id, s.checkLocation]), [["1128389", true], ["b0", undefined], ["b1", undefined]]);
+  assert.match(near.notes.find((n) => /checkLocation/.test(n)) ?? "", /^1 of 21 stations here give an address in another state.*1128389, Düren/);
+  const few = await findStationsNear(clientOf(registerApi({ rows: [...berlin.slice(0, 5), dueren] })).client, { lat: 52.5163, lon: 13.3777, radiusKm: 1 }, { now: NOW });
+  assert.ok(few.nearest.every((s) => s.checkLocation === undefined), "too few stations to judge");
 });
 
 test("searchStations: operators match any part of the company name, any case; a year or month of going live matches the dd.mm.yyyy text", async () => {

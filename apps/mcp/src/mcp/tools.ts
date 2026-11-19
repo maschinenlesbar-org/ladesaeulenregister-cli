@@ -81,7 +81,7 @@ const text = (max: number, description: string): JsonSchema => ({ type: "string"
 
 /** The filters every station tool takes, ANDed. */
 const FILTERS: Record<string, JsonSchema> = {
-  place: text(100, 'The place (Ort), its whole name, any case: "München", "Frankfurt am Main". An unknown one answers with the places that contain it.'),
+  place: text(100, 'The place (Ort), its whole name, any case: "München", "Frankfurt am Main". The register writes it as the operator did: a note names other places that contain it (Frankfurt am Main is also under "Frankfurt"); for a whole city district is surer.'),
   postcode: { type: "string", pattern: "^[0-9]{1,5}$", description: 'A postcode ("80809") or its start ("80").' },
   district: text(100, 'A part of the Kreis or kreisfreie Stadt: "Landkreis München", "Region Hannover".'),
   state: text(40, 'A Bundesland as a code or a name: "BY", "Bayern", "Bavaria", "NRW".'),
@@ -149,7 +149,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "EV charging stations near a point, nearest first",
     description: [
       'The public charging stations within a radius of a point, nearest first, with the distance. Use it for "Ladesäulen in der Nähe", "Schnelllader im Umkreis von 2 km um den Kölner Hauptbahnhof", "wo kann ich am Brandenburger Tor laden?", "charging stations near me", "fast chargers within 2 km of Brandenburger Tor", "150 kW chargers near these coordinates".',
-      "It needs lat and lon (latitude first): resolve a place or address yourself (Brandenburger Tor 52.5163, 13.3777). distanceKm is the straight line. For \"charge at N kW\" use minPointKw and quote maxChargePointKw, not stationKw (the station's figure, often the sum of its points: 2 x 160 kW reads 320). fast is above 22 kW, not DC: use dc for DC. operator is the company (legal entity). Empty says what to widen; with minPointKw it names the fastest point in the radius. Close with attribution.text.",
+      "It needs lat and lon (latitude first): resolve a place or address yourself (Brandenburger Tor 52.5163, 13.3777). distanceKm is the straight line. For \"charge at N kW\" use minPointKw and quote maxChargePointKw, not stationKw (the station's figure, often the sum of its points: 2 x 160 kW reads 320). fast is above 22 kW, not DC: use dc for DC. operator is the company (legal entity). checkLocation marks a station whose address is in another state than nearly all around it: its coordinates may be wrong, say so. Empty says what to widen; with minPointKw it names the fastest point in the radius. Close with attribution.text.",
       RULES,
     ].join("\n\n"),
     inputSchema: input({ ...POINT, radiusKm: radius(100), ...FILTERS, limit: { type: "integer", minimum: 1, maximum: 50, description: "How many of the nearest to list (1-50, default 10)." } }, ["lat", "lon", "radiusKm"]),
@@ -165,7 +165,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "Find and count EV charging stations",
     description: [
       'Counts the stations matching the filters and lists a page of them. Use it for "wie viele Schnellladesäulen gibt es in Berlin?", "EnBW-Ladesäulen in Bayern", "wo kann ich in München mit 300 kW laden?", "how many fast chargers are in Berlin?", "list EnBW charging stations in Bavaria", "DC chargers in Hamburg", "how many public chargers exist in Germany?", "stations that went live in August 2026".',
-      'total counts every match; limit 0 counts only. place is the whole name (an unknown one answers with the places that contain it); district or postcode for areas. Power per car: minPointKw and maxChargePointKw (stationKw is often the sum of the points), fastest first. fast (Schnellladeeinrichtung) is above 22 kW, not DC: dc reads all six charge points. Operators match a part of the company name. Say "the register lists N" (it undercounts) with the data date in attribution.text. Paged: nextOffset.',
+      'total counts every match; limit 0 counts only. place is the whole name as the operator wrote it (a note names other places containing it: Frankfurt / Frankfurt am Main; an unknown one answers with them); district or postcode for whole cities and areas. Power per car: minPointKw and maxChargePointKw (stationKw is often the sum of the points), fastest first. fast (Schnellladeeinrichtung) is above 22 kW, not DC: dc reads all six charge points. Operators match a part of the company name. Say "the register lists N" (it undercounts) with the data date in attribution.text. Paged: nextOffset.',
       RULES,
     ].join("\n\n"),
     inputSchema: input({ ...FILTERS, ...POINT, radiusKm: radius(1000), limit: { type: "integer", minimum: 0, maximum: 100, description: "How many stations to list (0-100, default 20); 0 counts only." }, offset: { type: "integer", minimum: 0, maximum: 200000, description: "Where the page starts (default 0); nextOffset says where the next one does." } }),

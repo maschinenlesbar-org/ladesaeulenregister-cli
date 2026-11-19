@@ -392,6 +392,12 @@ export interface Station {
   payment: string | null;
   /** The straight-line distance from the point asked about, km ({@link findStationsNear}). */
   distanceKm?: number;
+  /**
+   * True when the station's address lies in another state than nearly all stations around it
+   * ({@link findStationsNear}): its coordinates may be wrong (the register has stations of
+   * Düren and Dahme/Mark on the Brandenburger Tor).
+   */
+  checkLocation?: true;
 }
 
 /** A station's details: the {@link Station} plus where it is and when it opens. */
@@ -563,6 +569,7 @@ export async function searchStations(client: LadesaeulenClient, input: SearchSta
   const searched = searchedOf(f, near);
   const notes = [...filterNotes(f), ...(near === undefined ? [] : swapNote(near)), UNDERCOUNT];
   const attribution = attributionOf(client, options);
+  const places = otherPlaces(client, f.place);
   let total: number;
   let stations: Station[];
   if (f.minPointKw !== undefined) {
@@ -578,8 +585,10 @@ export async function searchStations(client: LadesaeulenClient, input: SearchSta
         ? []
         : (await client.stations({ ...q, outFields: STATION_FIELDS.join(","), limit, offset, orderBy: "OBJECTID" })).features.map((x) => toStation(x.attributes as Record<string, unknown>));
   }
+  const others = await places;
+  notes.unshift(...placeNote(f.place, others));
   if (total === 0) {
-    const suggestions = f.place === undefined ? [] : await placesLike(client, f.place);
+    const suggestions = others;
     return {
       status: "empty",
       searched,
@@ -595,10 +604,31 @@ export async function searchStations(client: LadesaeulenClient, input: SearchSta
   return { status: "ok", searched, total, stations, ...(limit > 0 && next < total ? { nextOffset: next } : {}), attribution: await attribution, notes };
 }
 
-/** The places (Ort) whose name contains `place`, most stations first (at most 10; one request). */
-async function placesLike(client: LadesaeulenClient, place: string): Promise<{ place: string; stations: number }[]> {
-  const { groups } = await client.countByPage("Ort", `Ort LIKE ${literal(`%${place}%`)}`);
-  return groups.filter((g) => typeof g.value === "string").slice(0, 10).map((g) => ({ place: g.value as string, stations: g.count }));
+/**
+ * The other places (Ort) whose name contains `place`, most stations first (at most 10; one
+ * request, started alongside the search): the register writes the place as the operator gave it,
+ * so Frankfurt am Main's stations are also under "Frankfurt" and "Frankfurt am Main-Niedereschbach".
+ */
+function otherPlaces(client: LadesaeulenClient, place: string | undefined): Promise<{ place: string; stations: number }[]> {
+  if (place === undefined) return Promise.resolve([]);
+  const pending = client
+    .countByPage("Ort", `Ort LIKE ${literal(`%${place}%`)}`)
+    .then(({ groups }) =>
+      groups
+        .filter((g): g is { value: string; count: number } => typeof g.value === "string" && g.value.trim().toLowerCase() !== place.toLowerCase())
+        .slice(0, 10)
+        .map((g) => ({ place: g.value.trim(), stations: g.count })),
+    );
+  pending.catch(() => {});
+  return pending;
+}
+
+/** The note naming the other places that contain `place`, when there are any. */
+function placeNote(place: string | undefined, others: { place: string; stations: number }[]): string[] {
+  if (place === undefined || others.length === 0) return [];
+  return [
+    `place matches the whole name "${place}"; the register writes the place as the operator gave it, and other places contain it: ${others.slice(0, 5).map((o) => `${o.place} (${o.stations})`).join(", ")}. For a whole city, district ("Kreisfreie Stadt …") or postcode is surer.`,
+  ];
 }
 
 function emptyReason(f: StationFilter, near: NearPoint | undefined, suggested: boolean): string {
@@ -653,6 +683,7 @@ export async function findStationsNear(client: LadesaeulenClient, input: FindSta
   const kept = atLeast(rows, f.minPointKw).map((a) => toStation(a));
   for (const s of kept) if (s.lat !== null && s.lon !== null) s.distanceKm = Math.round(distanceKm(near.lat, near.lon, s.lat, s.lon) * 100) / 100;
   kept.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+  notes.push(...checkLocations(kept));
   if (kept.length === 0) {
     let reason = `No station in the register within ${near.radiusKm} km of (${near.lat}, ${near.lon}) matches the filters (see searched). Widen radiusKm or drop a filter.`;
     if (f.minPointKw !== undefined && rows.length > 0) {
@@ -663,6 +694,28 @@ export async function findStationsNear(client: LadesaeulenClient, input: FindSta
     return { status: "empty", searched, total: 0, nearest: [], reason, attribution: await attribution, notes };
   }
   return { status: "ok", searched, total: kept.length, nearest: kept.slice(0, limit), attribution: await attribution, notes };
+}
+
+/** Fewest stations in a radius for {@link checkLocations} to judge, and the share below which a state stands out. */
+const LOCATION_SAMPLE = 20;
+const LOCATION_SHARE = 0.05;
+
+/**
+ * Mark the stations whose address is in a state that holds under 5 % of the (at least 20)
+ * stations around: their coordinates likely belong to another address. The register has
+ * stations of Düren (NRW) and Dahme/Mark (Brandenburg) at the Brandenburger Tor's coordinates
+ * (2026-11-19). A border area keeps both states well above 5 %.
+ */
+function checkLocations(stations: Station[]): string[] {
+  if (stations.length < LOCATION_SAMPLE) return [];
+  const byState = new Map<string | null, number>();
+  for (const s of stations) byState.set(s.state, (byState.get(s.state) ?? 0) + 1);
+  const odd = stations.filter((s) => s.state !== null && (byState.get(s.state) ?? 0) / stations.length < LOCATION_SHARE);
+  for (const s of odd) s.checkLocation = true;
+  if (odd.length === 0) return [];
+  return [
+    `${odd.length} of ${stations.length} stations here give an address in another state than nearly all the others (checkLocation: ${odd.slice(0, 5).map((s) => `${s.id}, ${s.place ?? "?"}`).join("; ")}): their coordinates may belong to another address. Check before sending a driver there.`,
+  ];
 }
 
 // ---- countStationsBy ------------------------------------------------------------------------
@@ -730,6 +783,7 @@ export async function countStationsBy(client: LadesaeulenClient, input: CountSta
   const notes = [...filterNotes(f), ...(near === undefined ? [] : swapNote(near)), UNDERCOUNT];
   if (groupBy === "operator") notes.push("Operators are legal entities: one brand can appear under several (EnBW mobility+ AG und Co.KG, EnBW Ostwürttemberg DonauRies AG).");
   const attribution = attributionOf(client, options);
+  const places = otherPlaces(client, f.place);
   let groups: { value: string | number | null; stations: number }[];
   let complete = true;
   let totalStations: number;
@@ -754,6 +808,7 @@ export async function countStationsBy(client: LadesaeulenClient, input: CountSta
     complete = !page.exceededTransferLimit;
     totalStations = complete ? groups.reduce((sum, g) => sum + g.stations, 0) : await client.count({ where });
   }
+  notes.unshift(...placeNote(f.place, await places));
   if (!complete) notes.push("More than 2,000 groups: the list was cut; the largest groups are all there, but groupCount is not the number of groups. Narrow with a filter for every group.");
   const base = { searched, groupBy, column, groupCount: groups.length, complete, totalStations, attribution: await attribution, notes };
   if (totalStations === 0) {
