@@ -3,7 +3,9 @@
 
 import type { Command } from "commander";
 import { InvalidArgumentError } from "commander";
+import { pidsProblem, responseCapFor } from "./limits.js";
 import { logOf, type CliDeps } from "./io.js";
+import { LadesaeulenError } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/errors";
 import { MAX_CHARGE_POINT_KW, MAX_RADIUS_KM, MIN_RADIUS_KM, type LadesaeulenClientOptions } from "@maschinenlesbar.org/ladesaeulenregister-client/internal/client";
 import {
   baseUrlProblem,
@@ -210,6 +212,9 @@ export function retryMessage(event: RetryEvent): string {
   return `${why} from ${host}: retry ${event.retry} of ${event.maxRetries} in ${wait}`;
 }
 
+/** The container can't run the CLI as it is limited (limits.ts): an ERROR record of the cli area and exit 1. */
+export class EnvironmentError extends LadesaeulenError {}
+
 /**
  * Wrap an async command action with consistent global-option resolution and
  * client construction. The callback receives a context (client + resolved global
@@ -234,6 +239,15 @@ export function action(
     const cleartext = cleartextProblem(global.baseUrl ?? DEFAULT_BASE_URL);
     if (cleartext !== undefined) logOf(deps).warn("http", cleartext);
     const options = toEngineOptions(global);
+    // In a container: under a pids limit Node can't work with, refuse before any request; under a
+    // memory limit the 100 MiB default can't be held, so cap by the memory instead (an oversized
+    // answer is then the cap's error, not an OOM kill). An explicit --max-response-bytes wins.
+    const limits = deps.limits?.() ?? {};
+    const problem = pidsProblem(limits);
+    if (problem !== undefined) throw new EnvironmentError(problem);
+    const given = command.getOptionValueSourceWithGlobals("maxResponseBytes");
+    const memory = given === undefined || given === "default" ? limits.memoryBytes : undefined;
+    if (memory !== undefined) options.maxResponseBytes = responseCapFor(memory);
     options.onRetry = (event) => logOf(deps).warn("http", retryMessage(event));
     options.onWarning = (message) => logOf(deps).warn("api", message);
     const client = deps.createClient(options);
