@@ -20,6 +20,41 @@ export {
   stationPowerKw,
 } from "./power.js";
 export { EMPTY_FIELDS, emptyFieldsIn } from "./columns.js";
+export {
+  countStationsBy,
+  DEFAULT_MAX_ROWS,
+  DEFAULT_NEAR_LIMIT,
+  DEFAULT_SEARCH_LIMIT,
+  findStationsNear,
+  getRegisterInfo,
+  getStation,
+  GROUP_COLUMNS,
+  resolveState,
+  searchStations,
+  stationsToGeoJson,
+  stationWhere,
+  STATES,
+  toStation,
+} from "./operations.js";
+export type {
+  Attribution,
+  ChargePoint,
+  CountStationsByInput,
+  FindStationsNearInput,
+  GroupBy,
+  NearPoint,
+  OperationOptions,
+  RegisterInfo,
+  SearchStationsInput,
+  Station,
+  StationCounts,
+  StationDetail,
+  StationFeature,
+  StationFilter,
+  StationLookup,
+  StationSearch,
+  StationsNear,
+} from "./operations.js";
 export type { LadesaeulenClientOptions } from "./client.js";
 export {
   RequestEngine,
