@@ -1,0 +1,199 @@
+{
+  "comment": "What tools/interop/interop.mjs needs that is particular to this repo: the mock upstream's answer per path (under --base-url http://127.0.0.1:<port>; the live layer document and two live stations of 2026-11-19, cut down), how many tools the server lists, and the calls to make with what each must answer. The mock answers every /0/query with the same body, so it carries what a count reads (count), what a page reads (features) and what a group-by reads (each feature's count).",
+  "answers": {
+    "/0": {
+      "name": "Ladesaeulen_einfach",
+      "maxRecordCount": 2000,
+      "editingInfo": {
+        "lastEditDate": 1794467839492,
+        "dataLastEditDate": 1794467839492
+      },
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "ID",
+          "type": "esriFieldTypeString",
+          "alias": "ID"
+        },
+        {
+          "name": "Betreiber",
+          "type": "esriFieldTypeString",
+          "alias": "Betreiber"
+        },
+        {
+          "name": "operator_companyName",
+          "type": "esriFieldTypeString",
+          "alias": "operator_companyName"
+        },
+        {
+          "name": "Ort",
+          "type": "esriFieldTypeString",
+          "alias": "Ort"
+        },
+        {
+          "name": "state",
+          "type": "esriFieldTypeString",
+          "alias": "state"
+        },
+        {
+          "name": "Typ",
+          "type": "esriFieldTypeString",
+          "alias": "Typ"
+        },
+        {
+          "name": "max_electric_power_station",
+          "type": "esriFieldTypeString",
+          "alias": "max_electric_power_station"
+        },
+        {
+          "name": "go_live_date",
+          "type": "esriFieldTypeString",
+          "alias": "go_live_date"
+        },
+        {
+          "name": "json_type",
+          "type": "esriFieldTypeString",
+          "alias": "json_type"
+        }
+      ]
+    },
+    "/0/query": {
+      "objectIdFieldName": "OBJECTID",
+      "count": 2,
+      "exceededTransferLimit": false,
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 38199,
+            "ID": "1055348",
+            "Betreiber": "Aral Pulse",
+            "operator_companyName": "BP Europa SE",
+            "Straße": "Riehler Straße",
+            "Hausnummer": "12-14",
+            "Postleitzahl": "50668",
+            "Ort": "Köln",
+            "district_independent_city": "Kreisfreie Stadt Köln",
+            "state": "Nordrhein-Westfalen",
+            "Typ": "Schnellladeeinrichtung",
+            "Status": "In Betrieb",
+            "max_electric_power_station": "150",
+            "Anzahl_Ladepunkte": "2",
+            "coordinates_latitude": 50.952291,
+            "coordinates_longitude": 6.961666,
+            "go_live_date": "13.12.2023",
+            "Bezahlsystem": "Onlinezahlungsverfahren, RFID-Karte",
+            "Steckersystem_Ladepunkt1": "DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)",
+            "Steckersystem_Ladepunkt2": "DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)",
+            "Steckersystem_Ladepunkt3": null,
+            "Steckersystem_Ladepunkt4": null,
+            "Steckersystem_Ladepunkt5": null,
+            "Steckersystem_Ladepunkt6": null,
+            "count": 1
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 40001,
+            "ID": "1059502",
+            "Betreiber": null,
+            "operator_companyName": "TankE GmbH",
+            "Straße": "Am Malzbüchel",
+            "Hausnummer": "1",
+            "Postleitzahl": "50667",
+            "Ort": "Köln",
+            "district_independent_city": "Kreisfreie Stadt Köln",
+            "state": "Nordrhein-Westfalen",
+            "Typ": "Schnellladeeinrichtung",
+            "Status": "In Betrieb",
+            "max_electric_power_station": "72",
+            "Anzahl_Ladepunkte": "2",
+            "coordinates_latitude": 50.9365,
+            "coordinates_longitude": 6.958,
+            "go_live_date": "05.03.2021",
+            "Bezahlsystem": "RFID-Karte",
+            "Steckersystem_Ladepunkt1": "DC Fahrzeugkupplung Typ Combo 2 (CCS) (50 kw)",
+            "Steckersystem_Ladepunkt2": "AC Typ 2 Steckdose (22 kw)",
+            "Steckersystem_Ladepunkt3": null,
+            "Steckersystem_Ladepunkt4": null,
+            "Steckersystem_Ladepunkt5": null,
+            "Steckersystem_Ladepunkt6": null,
+            "count": 1
+          }
+        }
+      ]
+    }
+  },
+  "tools": 6,
+  "calls": [
+    {
+      "name": "searchStations",
+      "arguments": {
+        "place": "Köln",
+        "type": "fast"
+      },
+      "expect": {
+        "status": "ok",
+        "total": 2,
+        "stations.0.id": "1055348",
+        "stations.0.maxChargePointKw": 150,
+        "attribution.dataLastEdited": "2026-11-12T07:17:19.492Z"
+      }
+    },
+    {
+      "name": "findStationsNear",
+      "arguments": {
+        "lat": 50.943,
+        "lon": 6.9589,
+        "radiusKm": 2
+      },
+      "expect": {
+        "status": "ok",
+        "nearest.0.id": "1059502",
+        "nearest.0.distanceKm": 0.73
+      }
+    },
+    {
+      "name": "countStationsBy",
+      "arguments": {
+        "groupBy": "state"
+      },
+      "expect": {
+        "status": "ok",
+        "groups.0.value": "Nordrhein-Westfalen",
+        "groups.0.stations": 2,
+        "totalStations": 2
+      }
+    },
+    {
+      "name": "getStation",
+      "arguments": {
+        "id": "1055348"
+      },
+      "expect": {
+        "status": "ok",
+        "station.operator": "BP Europa SE"
+      }
+    },
+    {
+      "name": "getRegisterInfo",
+      "arguments": {},
+      "expect": {
+        "status": "ok",
+        "totalStations": 2,
+        "dataLastEditDate": "2026-11-12T07:17:19.492Z"
+      }
+    },
+    {
+      "name": "searchStations",
+      "arguments": {
+        "place": "Köln",
+        "limit": 500
+      },
+      "error": true
+    }
+  ]
+}
