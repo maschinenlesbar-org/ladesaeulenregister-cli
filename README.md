@@ -31,6 +31,51 @@ npm install @maschinenlesbar.org/ladesaeulenregister-cli
 Requires **Node.js 22.12+**. If `ladesaeulen` isn't found after a global install, run
 `npm prefix -g` and add its `bin` directory (on Windows, the prefix itself) to `PATH`.
 
+### Docker
+
+From 0.10.0 every release is also a container image for linux/amd64 and linux/arm64 on the
+GitHub Container Registry, made from the same tarball as the npm package. It needs no Node.js and no
+install:
+
+```bash
+docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+  ghcr.io/maschinenlesbar-org/ladesaeulenregister-cli:latest stations --where "Ort='Köln'" --count
+```
+
+The image's entrypoint is the program, so the command follows the image name directly;
+`… ladesaeulenregister-cli:latest ladesaeulen stations --count` works too.
+
+In a container with a memory limit (`--memory`) the default `--max-response-bytes` is an eighth
+of that limit (at most the usual 100 MiB), so an oversized answer is refused with a clear
+error instead of the container being killed for memory.
+The CLI needs at least 12 processes and threads (`--pids-limit 12`): below that it refuses with
+an error, and with 4 or fewer Node.js itself hangs before the CLI can check.
+
+`latest` is the newest release. For scripts, name a release and pin its digest, which the
+[release notes](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/releases) give:
+`…/ladesaeulenregister-cli:0.10.0@sha256:<digest>`. Each image carries signed build provenance;
+check it with
+
+```bash
+gh attestation verify oci://ghcr.io/maschinenlesbar-org/ladesaeulenregister-cli:latest \
+  --repo maschinenlesbar-org/ladesaeulenregister-cli
+```
+
+### MCP server
+
+From 0.10.0 the same data is also an [MCP](https://modelcontextprotocol.io/) server for AI agents,
+`@maschinenlesbar.org/ladesaeulenregister-mcp` (command `ladesaeulen-mcp`, image
+`ghcr.io/maschinenlesbar-org/ladesaeulenregister-mcp`): six read-only tools, among them the
+stations near a point ranked by distance, a search that counts and lists by place, operator, DC
+or power per charge point, counts per state or operator and a GeoJSON map, on stdio or
+Streamable HTTP. Setup for Claude Code, Claude Desktop and VS Code:
+[MCP.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/MCP.md).
+
+```bash
+npm i -g @maschinenlesbar.org/ladesaeulenregister-mcp
+claude mcp add ladesaeulen -- ladesaeulen-mcp
+```
+
 ## CLI
 
 ```bash
@@ -105,7 +150,7 @@ ladesaeulen --log-format jsonl stations --where "Ort='Berlin'" 2>log.jsonl   # {
 ## Library
 
 ```ts
-import { LadesaeulenClient } from "@maschinenlesbar.org/ladesaeulenregister-cli";
+import { LadesaeulenClient, findStationsNear, searchStations } from "@maschinenlesbar.org/ladesaeulenregister-cli";
 
 const c = new LadesaeulenClient();
 await c.count({ where: "Typ='Schnellladeeinrichtung'" });          // number
@@ -113,6 +158,10 @@ await c.countBy("state");                                          // per Bundes
 const near = await c.stations({ near: { lat: 52.52, lon: 13.405, radiusKm: 1 } });
 // stations with a charge point of at least 300 kW; each row gets max_charge_point_kw
 const fast = await c.stations({ where: "Ort='München'", minChargePointKw: 300, limit: 200 });
+// the skills' use cases, with their traps built in (power per charge point, DC on any point,
+// the operator's company name) and the CC BY attribution with the register's data date
+const dcKoeln = await searchStations(c, { place: "Köln", dc: true, limit: 10 });    // { total, stations, attribution }
+const nearest = await findStationsNear(c, { lat: 50.943, lon: 6.9589, radiusKm: 2, minPointKw: 150 });
 ```
 
 ## Documentation
@@ -120,6 +169,7 @@ const fast = await c.stations({ where: "Ort='München'", minChargePointKw: 300, 
 - [Usage.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/Usage.md) — commands, the `--where`/spatial options, exit codes
 - [DEVELOPING.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/DEVELOPING.md) — architecture, testing, the ArcGIS specifics
 - [GLOSSARY.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/GLOSSARY.md) — the register's fields and terms
+- [MCP.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/MCP.md) — the MCP server: tools, setup, options
 - [DATA_LICENSE.md](DATA_LICENSE.md) — the CC BY 4.0 data terms
 - [SKILLS.md](https://github.com/maschinenlesbar-org/ladesaeulenregister-cli/blob/main/SKILLS.md) — the Claude Code skills this repo ships
 
