@@ -1,0 +1,47 @@
+{
+  "comment": "What tools/image/smoke.mjs needs that is particular to this repo: the bin (its log topic), a command that makes one request, the exit code of a network error, the mock's answer to that request (by path, under --base-url http://mock:8080; a live station of 2026-11-19), and a string the printed answer contains.",
+  "bin": "ladesaeulen",
+  "command": [
+    "stations",
+    "--limit",
+    "1"
+  ],
+  "networkErrorExit": 6,
+  "answers": {
+    "/0/query": {
+      "objectIdFieldName": "OBJECTID",
+      "exceededTransferLimit": false,
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 38199,
+            "ID": "1055348",
+            "Betreiber": "Aral Pulse",
+            "operator_companyName": "BP Europa SE",
+            "Straße": "Riehler Straße",
+            "Hausnummer": "12-14",
+            "Postleitzahl": "50668",
+            "Ort": "Köln",
+            "district_independent_city": "Kreisfreie Stadt Köln",
+            "state": "Nordrhein-Westfalen",
+            "Typ": "Schnellladeeinrichtung",
+            "Status": "In Betrieb",
+            "max_electric_power_station": "150",
+            "Anzahl_Ladepunkte": "2",
+            "coordinates_latitude": 50.952291,
+            "coordinates_longitude": 6.961666,
+            "go_live_date": "13.12.2023",
+            "Bezahlsystem": "Onlinezahlungsverfahren, RFID-Karte",
+            "Steckersystem_Ladepunkt1": "DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)",
+            "Steckersystem_Ladepunkt2": "DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)",
+            "Steckersystem_Ladepunkt3": null,
+            "Steckersystem_Ladepunkt4": null,
+            "Steckersystem_Ladepunkt5": null,
+            "Steckersystem_Ladepunkt6": null
+          }
+        }
+      ]
+    }
+  },
+  "expectStdout": "\"ID\": \"1055348\""
+}
