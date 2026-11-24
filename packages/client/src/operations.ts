@@ -660,6 +660,8 @@ function emptyReason(f: StationFilter, near: NearPoint | undefined, suggested: b
 export interface FindStationsNearInput extends StationFilter, NearPoint {
   /** How many of the nearest to list (1–50, default 10). */
   limit?: number | undefined;
+  /** How many of the nearest to skip (default 0): the farther ones, from a nextOffset. */
+  offset?: number | undefined;
 }
 
 /** The answer of {@link findStationsNear}. */
@@ -668,8 +670,10 @@ export interface StationsNear {
   searched: Record<string, unknown>;
   /** All matching stations within the radius. */
   total: number;
-  /** The nearest, with `distanceKm`. */
+  /** The nearest (from `offset` on), with `distanceKm`. */
   nearest: Station[];
+  /** Where the next page of farther stations starts, when there is one. */
+  nextOffset?: number;
   reason?: string;
   attribution: Attribution;
   notes: string[];
@@ -683,12 +687,13 @@ export const DEFAULT_NEAR_LIMIT = 10;
  * every station in the radius is read (up to `maxRows`) and ranked here, as the register sorts
  * by no distance. The point is latitude, longitude (WGS84); one that only lies in Germany when
  * swapped gets a note. Empty says what to widen; with `minPointKw`, the fastest charge point
- * found in the radius.
+ * found in the radius. Paged: `offset` skips the nearest, `nextOffset` says where the farther go on.
  */
 export async function findStationsNear(client: LadesaeulenClient, input: FindStationsNearInput, options: OperationOptions = {}): Promise<StationsNear> {
   const f = checkFilter(input);
   const near = checkNear({ lat: input.lat, lon: input.lon, radiusKm: input.radiusKm });
   const limit = assertValid("limit", input.limit ?? DEFAULT_NEAR_LIMIT, integerIn(1, 50));
+  const offset = assertValid("offset", input.offset ?? 0, integerIn(0, 1_000_000));
   const searched = searchedOf(f, near);
   const notes = [...swapNote(near), ...filterNotes(f), "distanceKm is the straight line from the point, not the way by road."];
   const attribution = attributionOf(client, options);
@@ -706,7 +711,8 @@ export async function findStationsNear(client: LadesaeulenClient, input: FindSta
     }
     return { status: "empty", searched, total: 0, nearest: [], reason, attribution: await attribution, notes };
   }
-  return { status: "ok", searched, total: kept.length, nearest: kept.slice(0, limit), attribution: await attribution, notes };
+  const next = offset + limit;
+  return { status: "ok", searched, total: kept.length, nearest: kept.slice(offset, next), ...(next < kept.length ? { nextOffset: next } : {}), attribution: await attribution, notes };
 }
 
 /** Fewest stations in a radius for {@link checkLocations} to judge, and the share below which a state stands out. */

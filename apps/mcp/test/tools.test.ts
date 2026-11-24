@@ -133,3 +133,19 @@ test("getStationMap offers the page sizes it takes: limit up to 100, as a search
   assert.equal(api.calls.length, before, "no request");
   await connection.close();
 });
+
+test("findStationsNear cut by the size cap says where the farther stations go on: nextOffset, then offset", async () => {
+  const points = Array.from({ length: 4 }, (_, i) => `DC Fahrzeugkupplung Typ Combo 2 (CCS) (${150 + i} kw)`);
+  const rows = Array.from({ length: 30 }, (_, i) =>
+    stationRow(500 + i, `k${i}`, { Ort: "Köln", state: "Nordrhein-Westfalen", coordinates_latitude: 50.943 + (i + 1) / 5000, coordinates_longitude: 6.9589, ...Object.fromEntries(points.map((p, n) => [`Steckersystem_Ladepunkt${n + 1}`, p])) }),
+  );
+  const connection = await connect({ transport: registerApi({ rows }), config: { maxResultChars: 8000 } });
+  const first = (await connection.call("findStationsNear", { ...KOELN_HBF, radiusKm: 5, limit: 30 })).structuredContent ?? {};
+  const kept = (first["nearest"] as { id: string }[]).map((s) => s.id);
+  assert.equal(first["truncated"], true);
+  assert.ok(kept.length > 0 && kept.length < 30, `${kept.length}`);
+  assert.equal(first["nextOffset"], kept.length);
+  const next = (await connection.call("findStationsNear", { ...KOELN_HBF, radiusKm: 5, limit: 30, offset: first["nextOffset"] })).structuredContent ?? {};
+  assert.equal((next["nearest"] as { id: string }[])[0]?.id, `k${kept.length}`, "the next nearest, none skipped or repeated");
+  await connection.close();
+});

@@ -68,7 +68,7 @@ For scripts and shared configs, pin a release and its digest from the
 
 | Tool | What it answers |
 |---|---|
-| `findStationsNear` | The stations within a radius of a point (latitude, longitude), nearest first, with the straight-line distance; with the filters below. A station whose address is in another state than nearly all around it is marked (`checkLocation`: its coordinates may be wrong). None at a power names the fastest charge point found. |
+| `findStationsNear` | The stations within a radius of a point (latitude, longitude), nearest first, with the straight-line distance; with the filters below. Paged (`offset`, `nextOffset`), so the farther stations of a list the size cap cut can still be had. A station whose address is in another state than nearly all around it is marked (`checkLocation`: its coordinates may be wrong). None at a power names the fastest charge point found. |
 | `searchStations` | Counts the stations matching the filters and lists a page of them (`limit` 0 counts only); by power per charge point fastest first. The register writes the place as the operator gave it, so a note names the other places that contain the name (Frankfurt am Main's stations are also under "Frankfurt"); an unknown place answers with them. |
 | `countStationsBy` | Station counts per state, place, district, operator, type, status, postcode or number of charge points, largest first, exact; says when the server cut a list at 2,000 groups. |
 | `getStationMap` | The stations of a search as a GeoJSON FeatureCollection of points, a page (`limit`, up to 100) at a time. |

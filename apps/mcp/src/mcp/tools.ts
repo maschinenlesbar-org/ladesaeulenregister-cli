@@ -149,15 +149,16 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "EV charging stations near a point, nearest first",
     description: [
       'The public charging stations within a radius of a point, nearest first, with the distance. Use it for "Ladesäulen in der Nähe", "Schnelllader im Umkreis von 2 km um den Kölner Hauptbahnhof", "wo kann ich am Brandenburger Tor laden?", "charging stations near me", "fast chargers within 2 km of Brandenburger Tor", "150 kW chargers near these coordinates".',
-      "It needs lat and lon (latitude first): resolve a place or address yourself (Brandenburger Tor 52.5163, 13.3777). distanceKm is the straight line. For \"charge at N kW\" use minPointKw and quote maxChargePointKw, not stationKw (the station's figure, often the sum of its points: 2 x 160 kW reads 320). fast is above 22 kW, not DC: use dc for DC. operator is the company (legal entity). checkLocation marks a station whose address is in another state than nearly all around it: its coordinates may be wrong, say so. Empty says what to widen; with minPointKw it names the fastest point in the radius. Close with attribution.text.",
+      "It needs lat and lon (latitude first): resolve a place or address yourself (Brandenburger Tor 52.5163, 13.3777). distanceKm is the straight line. For \"charge at N kW\" use minPointKw and quote maxChargePointKw, not stationKw (the station's figure, often the sum of its points: 2 x 160 kW reads 320). fast is above 22 kW, not DC: use dc for DC. operator is the company (legal entity). checkLocation marks a station whose address is in another state than nearly all around it: its coordinates may be wrong, say so. Empty says what to widen; with minPointKw it names the fastest point in the radius. Paged: nextOffset (farther ones). Close with attribution.text.",
       RULES,
     ].join("\n\n"),
-    inputSchema: input({ ...POINT, radiusKm: radius(100), ...FILTERS, limit: { type: "integer", minimum: 1, maximum: 50, description: "How many of the nearest to list (1-50, default 10)." } }, ["lat", "lon", "radiusKm"]),
-    outputSchema: output({ total: int, nearest: arr }),
+    inputSchema: input({ ...POINT, radiusKm: radius(100), ...FILTERS, limit: { type: "integer", minimum: 1, maximum: 50, description: "How many of the nearest to list (1-50, default 10)." }, offset: { type: "integer", minimum: 0, maximum: 200000, description: "How many of the nearest to skip (default 0); nextOffset says where the farther ones go on." } }, ["lat", "lon", "radiusKm"]),
+    outputSchema: output({ total: int, nearest: arr, nextOffset: int }),
     source: (args) => queryOf(args),
+    paged: (args) => ({ list: "nearest", offset: num(args, "offset") ?? 0 }),
     async run(args, context) {
       const near = nearOf(args) as NearPoint;
-      return { ...(await findStationsNear(context.client, { ...filterOf(args), ...near, limit: num(args, "limit") }, { maxRows: maxRows(context.maxPages) })) };
+      return { ...(await findStationsNear(context.client, { ...filterOf(args), ...near, limit: num(args, "limit"), offset: num(args, "offset") }, { maxRows: maxRows(context.maxPages) })) };
     },
   },
   {
