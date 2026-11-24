@@ -69,6 +69,15 @@ test("a where must be one condition on its own: one that closes the parenthesis 
   assert.equal(queries(api).find((p) => p.has("returnCountOnly"))?.get("where"), "Ort = 'München' AND ((Ort <> 'a) OR (b' OR Ort = 'it''s ('))");
 });
 
+test("the attribution names one retrieval day: retrieved is the German date of the text, also in the hours after midnight in Berlin", async () => {
+  const { client } = clientOf();
+  for (const [now, day, text] of [["2026-11-22T23:30:00Z", "2026-11-23", "23.11.2026"], ["2026-06-30T22:30:00Z", "2026-07-01", "01.07.2026"], ["2026-11-22T12:00:00Z", "2026-11-22", "22.11.2026"]] as const) {
+    const { attribution } = await getRegisterInfo(client, { now: () => new Date(now) });
+    assert.equal(attribution.retrieved, day, now);
+    assert.ok(attribution.text.endsWith(`abgerufen am ${text}`), attribution.text);
+  }
+});
+
 test("a row becomes a station: the operator from the company name (Betreiber is null), trimmed; figures as numbers; the go-live date as ISO; connectors per point", () => {
   const rows = registerRows();
   const tanke = toStation(rows[2] as Record<string, unknown>);

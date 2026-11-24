@@ -282,7 +282,7 @@ export interface Attribution {
   licenceName: string;
   /** When the register's data was last edited (the layer's `dataLastEditDate`), ISO 8601; null if the server sent none. */
   dataLastEdited: string | null;
-  /** The day the answer was read, YYYY-MM-DD (UTC). */
+  /** The day the answer was read, YYYY-MM-DD: the German date (Europe/Berlin) of "abgerufen am" in `text`. */
   retrieved: string;
 }
 
@@ -293,6 +293,12 @@ const LICENCE_URL = "https://creativecommons.org/licenses/by/4.0/";
 /** `2026-11-12T07:17:19.492Z` as `12.11.2026` (German local date). */
 function germanDate(iso: string): string {
   return new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
+}
+
+/** The German local day of `date`, YYYY-MM-DD: the day "abgerufen am" names. */
+function germanDay(date: Date): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric" }).formatToParts(date).map((p) => [p.type, p.value]));
+  return `${parts["year"]}-${parts["month"]}-${parts["day"]}`;
 }
 
 /**
@@ -321,7 +327,7 @@ function attributionFrom(dataLastEditDate: string | null, options: OperationOpti
     licence: LICENCE_URL,
     licenceName: "CC BY 4.0",
     dataLastEdited: dataLastEditDate,
-    retrieved: now.toISOString().slice(0, 10),
+    retrieved: germanDay(now),
   };
 }
 
