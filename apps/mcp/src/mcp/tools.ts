@@ -208,7 +208,7 @@ export const TOOLS: readonly ToolDefinition[] = [
       "Each feature's properties: the station's id, operator, address, type, maxChargePointKw (what a car gets), stationKw, dc, status. Paged: total counts every match, nextOffset where the next page starts; for a file, join the pages' features. leftOff names stations without coordinates. Put attribution.text on the map (CC BY 4.0).",
       RULES,
     ].join("\n\n"),
-    inputSchema: input({ ...FILTERS, ...POINT, radiusKm: radius(1000), offset: { type: "integer", minimum: 0, maximum: 200000, description: "Where the page starts (default 0)." }, limit: { type: "integer", minimum: 1, maximum: 500, description: "How many features per page (1-500, default 100)." } }),
+    inputSchema: input({ ...FILTERS, ...POINT, radiusKm: radius(1000), offset: { type: "integer", minimum: 0, maximum: 200000, description: "Where the page starts (default 0)." }, limit: { type: "integer", minimum: 1, maximum: 100, description: "How many features per page (1-100, default 100)." } }),
     outputSchema: output({ type: str_, features: arr, total: int, nextOffset: int, leftOff: arr, suggestions: arr }),
     source: (args) => queryOf(args),
     paged: (args) => ({ list: "features", offset: num(args, "offset") ?? 0 }),

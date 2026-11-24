@@ -9,6 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { listTools } from "../src/mcp/server.js";
+import { TOOLS } from "../src/mcp/tools.js";
 import { connect } from "./harness.js";
 import { paramsOf, registerApi, stationRow } from "./helpers.js";
 
@@ -113,5 +114,22 @@ test("minPointKw over more candidates than one call reads (--max-pages) is a too
   assert.equal(result.isError, true);
   assert.match(result.content[0]?.text ?? "", /2001 stations to read, more than one call reads \(2000\); narrow it with state, place, operator or a radius/);
   assert.equal(api.calls.map(paramsOf).filter((p) => p.has("resultOffset")).length, 0, "no page read");
+  await connection.close();
+});
+
+test("getStationMap offers the page sizes it takes: limit up to 100, as a search page; 101 is refused by the schema, before any request", async () => {
+  const map = TOOLS.find((t) => t.name === "getStationMap");
+  const limit = (map?.inputSchema as { properties: Record<string, { maximum: number; description: string }> }).properties["limit"];
+  assert.equal(limit?.maximum, 100);
+  assert.match(limit?.description ?? "", /\(1-100, default 100\)/);
+  const api = registerApi();
+  const connection = await connect({ transport: api });
+  const full = await connection.call("getStationMap", { place: "Köln", limit: 100 });
+  assert.equal(full.structuredContent?.["status"], "ok", full.content[0]?.text);
+  const before = api.calls.length;
+  const over = await connection.call("getStationMap", { place: "Köln", limit: 101 });
+  assert.equal(over.isError, true);
+  assert.match(over.content[0]?.text ?? "", /limit/);
+  assert.equal(api.calls.length, before, "no request");
   await connection.close();
 });
