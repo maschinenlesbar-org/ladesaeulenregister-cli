@@ -100,7 +100,8 @@ Every value you type is sent trimmed and in composed Unicode (NFC), or refused b
 request (exit 2): a blank value or one of only invisible characters, half a character, a
 control character or an invisible format character (a zero-width space, a soft hyphen, a bidi
 control; `--where` keeps tabs, line breaks and ZWJ). A refusal shows such a character escaped
-(`\u200b`).
+(`\u200b`). A `--where` must be one condition on its own: unbalanced parentheses, an open quote or
+an SQL comment are refused too.
 - **`info`** prints the layer's last edit date (`dataLastEditDate`), the register's as-of
   date: the data is a snapshot, refreshed irregularly, and no row carries a date.
 

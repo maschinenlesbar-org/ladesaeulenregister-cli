@@ -87,6 +87,33 @@ export function normalizeText(value: string): string {
   return value.trim().normalize("NFC");
 }
 
+/**
+ * A `where` of one's own, as the client and the use cases put it into a larger condition
+ * (`(…) AND CAST(…)`, `place AND … AND (…)`): a text ({@link textProblem}) that is one condition
+ * on its own. Outside its string literals (`'…'`, `"…"`, a doubled quote inside is a quote) its
+ * parentheses close only what it opened and are all closed, every literal is closed, and it holds
+ * no SQL comment (`--`, `/*`). `1=1) OR (1=1` would close the parenthesis it is put in and OR its
+ * way past every other filter; the server would answer for the whole register.
+ */
+export function whereProblem(value: string): string | undefined {
+  const text = textProblem(value);
+  if (text !== undefined) return text;
+  const own = "a where is ANDed with the other filters and must be one condition on its own.";
+  let depth = 0;
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
+    if (c === "'" || c === '"') {
+      let end = i + 1;
+      while (end < value.length && !(value[end] === c && value[end + 1] !== c)) end += value[end] === c ? 2 : 1;
+      if (end >= value.length) return `${quoteValue(value)} opens a string with ${c} that is never closed: ${own}`;
+      i = end;
+    } else if (c === "(") depth++;
+    else if (c === ")" && --depth < 0) return `${quoteValue(value)} closes a parenthesis it never opened (character ${i + 1}): ${own}`;
+    else if ((c === "-" && value[i + 1] === "-") || (c === "/" && value[i + 1] === "*")) return `${quoteValue(value)} holds an SQL comment (${c}${value[i + 1]}), which this client doesn't send: ${own}`;
+  }
+  return depth > 0 ? `${quoteValue(value)} opens a parenthesis it never closes: ${own}` : undefined;
+}
+
 /** A control or format character in a token (after trimming): every Cc and every Cf. */
 const TOKEN_INVISIBLE = /[\p{Cc}\p{Cf}]/u;
 

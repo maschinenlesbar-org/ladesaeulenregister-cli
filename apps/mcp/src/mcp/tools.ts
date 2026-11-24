@@ -92,7 +92,7 @@ const FILTERS: Record<string, JsonSchema> = {
   minPointKw: { type: "number", minimum: 1, maximum: 1000, description: "Only stations where one charge point delivers at least this many kW (what a car can get). Nationwide it reads every candidate: add a state or place." },
   goLiveYear: { type: "integer", minimum: 1990, maximum: 2100, description: "The year the station went live." },
   goLiveMonth: { type: "integer", minimum: 1, maximum: 12, description: "The month of goLiveYear (1-12)." },
-  where: text(1000, "One more condition in the register's SQL (getRegisterInfo lists the columns), ANDed: \"Status = 'In Wartung'\". Text columns hold numbers: CAST(Anzahl_Ladepunkte AS INTEGER) > 4."),
+  where: text(1000, "One more condition in the register's SQL (getRegisterInfo lists the columns), ANDed, so one condition on its own (balanced parentheses, quotes closed): \"Status = 'In Wartung'\". Text columns hold numbers: CAST(Anzahl_Ladepunkte AS INTEGER) > 4."),
 };
 
 const POINT: Record<string, JsonSchema> = {

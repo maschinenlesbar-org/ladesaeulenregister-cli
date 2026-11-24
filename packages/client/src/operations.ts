@@ -23,7 +23,7 @@ import { emptyFieldsIn, EMPTY_FIELDS } from "./columns.js";
 import { LadesaeulenValidationError } from "./errors.js";
 import { CHARGE_POINT_FIELDS, connectorRatingsKw, maxChargePointKw, stationPowerKw } from "./power.js";
 import type { StationQuery } from "./types.js";
-import { assertValid, normalizeText, textProblem, tokenProblem, type Problem } from "./validate.js";
+import { assertValid, normalizeText, textProblem, tokenProblem, whereProblem, type Problem } from "./validate.js";
 
 // ---- shared ---------------------------------------------------------------------------------
 
@@ -208,7 +208,7 @@ function checkFilter(filter: StationFilter): StationFilter {
     if (f.goLiveYear === undefined) throw new LadesaeulenValidationError("Invalid goLiveMonth: give goLiveYear with it (the month of which year?).");
     f.goLiveMonth = assertValid("goLiveMonth", filter.goLiveMonth, integerIn(1, 12));
   }
-  if (filter.where !== undefined) f.where = text("where", filter.where);
+  if (filter.where !== undefined) f.where = normalizeText(assertValid("where", filter.where, whereProblem));
   return f;
 }
 

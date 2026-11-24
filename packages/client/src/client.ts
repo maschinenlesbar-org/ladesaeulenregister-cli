@@ -23,6 +23,7 @@ import {
   outFieldsProblem,
   textProblem,
   tokenProblem,
+  whereProblem,
 } from "./validate.js";
 import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw } from "./power.js";
 import type {
@@ -301,7 +302,7 @@ function queryArg(q: unknown): StationQuery {
  * odd request such as `distance=Infinity` or `resultRecordCount=-3`).
  */
 function checkQuery(q: StationQuery): void {
-  checkText("where", q.where);
+  checkText("where", q.where, whereProblem);
   checkText("outFields", q.outFields, outFieldsProblem);
   checkText("orderBy", q.orderBy, orderByProblem);
   checkInt("limit", q.limit, 1, MAX_LIMIT);
@@ -520,7 +521,7 @@ export class LadesaeulenClient {
    */
   async countByPage(field: string, where = "1=1"): Promise<CountByPage> {
     const name = groupField(field);
-    checkText("where", where);
+    checkText("where", where, whereProblem);
     const params: QueryParams = {
       where: normalizeText(where),
       f: "json",

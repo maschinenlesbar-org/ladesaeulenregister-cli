@@ -581,3 +581,11 @@ test("stdout redaction hides the userinfo of a URL glued onto the one before it 
   assert.ok(out.includes("https://host://***@h and https://***@x://***@w"), out);
   for (const secret of ["u:p1", "u:p2", "v:q3"]) assert.ok(!out.includes(secret), out);
 });
+
+test("a --where that closes the parenthesis the CLI puts it in is a usage error, before any request: it would drop --min-point-kw", async () => {
+  const cli = makeCli(() => jsonResponse(fx.stations));
+  const code = await run(["stations", "--where", "1=1) OR (1=1", "--min-point-kw", "300"], cli.deps);
+  assert.equal(code, 2);
+  assert.match(untimed(cli.err.join("\n")), /^ERROR \[ladesaeulen\.cli\] Invalid where: .*closes a parenthesis it never opened/);
+  assert.equal(cli.mt.calls.length, 0);
+});

@@ -180,9 +180,12 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
   (`GET <url> failed: <reason>`, URL redacted, the original as `cause`).
   `apps/cli/test/conformance-p5-transport-contract.test.ts` checks it.
 - **The client validates its own arguments** before any request (not only the CLI):
-  `where` passes `textProblem` and is sent as `normalizeText` gives it (trimmed, NFC; not
+  `where` passes `whereProblem` and is sent as `normalizeText` gives it (trimmed, NFC; not
   blank or only invisible characters, no lone surrogate, no control character but TAB/LF/CR,
-  no format character but ZWNJ/ZWJ), `outFields` passes `outFieldsProblem` (a comma list of
+  no format character but ZWNJ/ZWJ; one condition on its own: outside its string literals its
+  parentheses balanced, every literal closed, no `--` or `/*` comment, since the client puts it
+  into `(…) AND CAST(…)` for `minChargePointKw` and the use cases AND it with their filters, and
+  `1=1) OR (1=1` would OR its way past them), `outFields` passes `outFieldsProblem` (a comma list of
   tokens, no empty item; sent item by item trimmed and NFC, `normalizeOutFields`), `orderBy`
   passes `orderByProblem` (a token — no control, format or invisible character — in the
   documented sort syntax: column names, `ASC`/`DESC`, `CAST(…)`, commas, spaces; sent as

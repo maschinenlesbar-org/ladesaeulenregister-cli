@@ -53,6 +53,22 @@ test("% and _ in operator, district and connector match themselves, not every st
   assert.ok(queries(api).some((p) => p.get("where") === "Ort LIKE '%\\%%' ESCAPE '\\'"), "the suggestions' query escapes it too");
 });
 
+test("a where must be one condition on its own: one that closes the parenthesis it is put in, opens one, leaves a quote open or holds a comment is refused before any request", async () => {
+  const { api, client } = clientOf();
+  const escapes = ["1=1) OR (1=1", "(1=1", "Ort = 'x", "1=1 --", "/* ( */ 1=1) OR (1=1 /* ) */", "Ort = \"x"];
+  for (const where of escapes) {
+    await assert.rejects(searchStations(client, { place: "München", where, limit: 0 }, { now: NOW }), (err: unknown) => err instanceof LadesaeulenValidationError && /^Invalid where: /.test(err.message), where);
+    await assert.rejects(client.count({ where, minChargePointKw: 300 }), LadesaeulenValidationError, `the client ANDs it with the power figure: ${where}`);
+    await assert.rejects(client.countBy("state", where), LadesaeulenValidationError, where);
+  }
+  assert.equal(api.calls.length, 0, "no request");
+  await assert.rejects(searchStations(client, { where: "1=1) OR (1=1" }), /closes a parenthesis it never opened.*ANDed with the other filters/);
+  // Parentheses and quotes inside a string literal are text; '' is a quote in one.
+  const fine = await searchStations(client, { place: "München", where: "(Ort <> 'a) OR (b' OR Ort = 'it''s (')", limit: 0 }, { now: NOW });
+  assert.equal(fine.status, "ok");
+  assert.equal(queries(api).find((p) => p.has("returnCountOnly"))?.get("where"), "Ort = 'München' AND ((Ort <> 'a) OR (b' OR Ort = 'it''s ('))");
+});
+
 test("a row becomes a station: the operator from the company name (Betreiber is null), trimmed; figures as numbers; the go-live date as ISO; connectors per point", () => {
   const rows = registerRows();
   const tanke = toStation(rows[2] as Record<string, unknown>);

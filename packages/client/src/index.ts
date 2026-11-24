@@ -91,6 +91,7 @@ export {
   splitList,
   textProblem,
   tokenProblem,
+  whereProblem,
 } from "./validate.js";
 export type { Problem } from "./validate.js";
 export type { QueryParams, QueryValue } from "./query.js";

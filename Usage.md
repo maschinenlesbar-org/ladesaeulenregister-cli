@@ -27,7 +27,7 @@ ladesaeulen [global options] <command> [command options]
 
 | Option | Description |
 |---|---|
-| `--where <sql>` | SQL filter, e.g. `"Ort='Berlin' AND Typ='Schnellladeeinrichtung'"`. Sent trimmed and in composed Unicode (NFC); a value that is blank or only invisible characters, or that holds a control character (but tab and line breaks), a format character (a zero-width space, a soft hyphen, a bidi control) or half a character is a usage error |
+| `--where <sql>` | SQL filter, e.g. `"Ort='Berlin' AND Typ='Schnellladeeinrichtung'"`. Sent trimmed and in composed Unicode (NFC); a value that is blank or only invisible characters, or that holds a control character (but tab and line breaks), a format character (a zero-width space, a soft hyphen, a bidi control) or half a character is a usage error. It must be one condition on its own (it is combined with `--min-point-kw`): outside its string literals its parentheses balanced, every literal closed and no SQL comment (`--`, `/*`), else a usage error |
 | `--limit <n>` | max rows per request (1..10000, default 50). The server returns **at most ~2000** — page the rest with `--offset` |
 | `--offset <n>` | rows to skip (paging) |
 | `--order-by <spec>` | sort, e.g. `"Ort ASC"` or `"CAST(max_electric_power_station AS FLOAT) DESC"` (power is a text column; without the cast it sorts as text). Column names, `ASC`/`DESC`, `CAST(…)`, commas and spaces only; trimmed and NFC, an invisible or control character is a usage error |
