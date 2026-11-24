@@ -149,3 +149,26 @@ test("findStationsNear cut by the size cap says where the farther stations go on
   assert.equal((next["nearest"] as { id: string }[])[0]?.id, `k${kept.length}`, "the next nearest, none skipped or repeated");
   await connection.close();
 });
+
+test("getStationMap: a station without coordinates is an unlocated feature in its place, so a page cut by the size cap goes on where it stopped", async () => {
+  const rows = Array.from({ length: 12 }, (_, i) =>
+    stationRow(700 + i, `m${i}`, { Ort: "Köln", state: "Nordrhein-Westfalen", ...(i % 2 === 1 ? { coordinates_latitude: null, coordinates_longitude: null } : { coordinates_latitude: 50.94 + i / 1000, coordinates_longitude: 6.95 }) }),
+  );
+  const whole = await connect({ transport: registerApi({ rows }) });
+  const all = (await whole.call("getStationMap", { place: "Köln", limit: 12 })).structuredContent ?? {};
+  await whole.close();
+  const features = all["features"] as { id: string; geometry: { type: string } | null }[];
+  assert.deepEqual(features.map((f) => f.id), rows.map((r) => r["ID"]), "every station of the page, in order");
+  assert.equal(features[1]?.geometry, null, "unlocated (RFC 7946), not placed at 0,0");
+  assert.equal(features[0]?.geometry?.type, "Point");
+  assert.equal(all["leftOff"], undefined);
+  const connection = await connect({ transport: registerApi({ rows }), config: { maxResultChars: 4000 } });
+  const first = (await connection.call("getStationMap", { place: "Köln", limit: 12 })).structuredContent ?? {};
+  const kept = (first["features"] as { id: string }[]).length;
+  assert.equal(first["truncated"], true);
+  assert.ok(kept > 1 && kept < 12, `${kept}`);
+  assert.equal(first["nextOffset"], kept, "the stations the page holds, located or not");
+  const next = (await connection.call("getStationMap", { place: "Köln", limit: 12, offset: first["nextOffset"] })).structuredContent ?? {};
+  assert.equal((next["features"] as { id: string }[])[0]?.id, `m${kept}`, "none skipped or read twice");
+  await connection.close();
+});

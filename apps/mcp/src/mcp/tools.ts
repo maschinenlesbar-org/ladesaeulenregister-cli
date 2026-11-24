@@ -15,10 +15,10 @@ import {
   GROUP_COLUMNS,
   LadesaeulenValidationError,
   searchStations,
-  stationsToGeoJson,
   stationWhere,
   type GroupBy,
   type NearPoint,
+  type Station,
   type StationFilter,
 } from "@maschinenlesbar.org/ladesaeulenregister-client";
 import type { JsonSchema, ToolDefinition } from "./server.js";
@@ -140,6 +140,20 @@ function queryOf(args: Record<string, unknown>, extra: Record<string, string> = 
   return `0/query?${query.toString()}`;
 }
 
+/**
+ * A page's stations as GeoJSON Features, in their order: one without coordinates is unlocated
+ * (geometry null, RFC 7946 3.2) in its place, so the page is one list and a nextOffset the size
+ * cap sets counts every station it holds.
+ */
+function featuresOf(stations: readonly Station[]): Record<string, unknown>[] {
+  return stations.map(({ lat, lon, points: _points, ...properties }) => ({
+    type: "Feature",
+    id: properties.id,
+    geometry: lat === null || lon === null ? null : { type: "Point", coordinates: [lon, lat] },
+    properties,
+  }));
+}
+
 /** The most rows a call reads (`--max-pages` pages of 2,000). */
 const maxRows = (maxPages: number): number => maxPages * 2000;
 
@@ -206,18 +220,17 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "EV charging stations as GeoJSON",
     description: [
       'The stations matching the filters (and a radius, if given) as a GeoJSON FeatureCollection of Points ([longitude, latitude]) for a map. Use it for "Ladesäulen in Köln auf einer Karte", "Schnelllader in Bayern als GeoJSON", "map the fast chargers around this point", "export the EnBW stations as GeoJSON for QGIS / geojson.io / Leaflet".',
-      "Each feature's properties: the station's id, operator, address, type, maxChargePointKw (what a car gets), stationKw, dc, status. Paged: total counts every match, nextOffset where the next page starts; for a file, join the pages' features. leftOff names stations without coordinates. Put attribution.text on the map (CC BY 4.0).",
+      "Each feature's properties: the station's id, operator, address, type, maxChargePointKw (what a car gets), stationKw, dc, status. Paged: total counts every match, nextOffset where the next page starts; for a file, join the pages' features. A station without coordinates is a feature with geometry null (unlocated): name it, it has no place on the map. Put attribution.text on the map (CC BY 4.0).",
       RULES,
     ].join("\n\n"),
     inputSchema: input({ ...FILTERS, ...POINT, radiusKm: radius(1000), offset: { type: "integer", minimum: 0, maximum: 200000, description: "Where the page starts (default 0)." }, limit: { type: "integer", minimum: 1, maximum: 100, description: "How many features per page (1-100, default 100)." } }),
-    outputSchema: output({ type: str_, features: arr, total: int, nextOffset: int, leftOff: arr, suggestions: arr }),
+    outputSchema: output({ type: str_, features: arr, total: int, nextOffset: int, suggestions: arr }),
     source: (args) => queryOf(args),
     paged: (args) => ({ list: "features", offset: num(args, "offset") ?? 0 }),
     async run(args, context) {
       const found = await searchStations(context.client, { ...filterOf(args), near: nearOf(args), limit: num(args, "limit") ?? 100, offset: num(args, "offset") }, { maxRows: maxRows(context.maxPages) });
       const { stations, ...rest } = found;
-      const { features, leftOff } = stationsToGeoJson(stations);
-      return { type: "FeatureCollection", ...rest, features, ...(leftOff.length === 0 ? {} : { leftOff }) };
+      return { type: "FeatureCollection", ...rest, features: featuresOf(stations) };
     },
   },
   {
