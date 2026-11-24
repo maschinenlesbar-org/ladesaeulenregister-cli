@@ -8,9 +8,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LadesaeulenClient } from "../src/client.js";
-import { LadesaeulenError, LadesaeulenValidationError } from "../src/errors.js";
+import { LadesaeulenError, LadesaeulenParseError, LadesaeulenValidationError } from "../src/errors.js";
 import { countStationsBy, findStationsNear, getRegisterInfo, getStation, resolveState, searchStations, stationsToGeoJson, stationWhere, toStation } from "../src/operations.js";
 import { paramsOf, registerApi, registerRows, stationRow } from "./fixtures.js";
+import { jsonResponse } from "./helpers.js";
 
 const NOW = () => new Date("2026-11-19T15:00:00Z");
 const clientOf = (api = registerApi()) => ({ api, client: new LadesaeulenClient({ transport: api.transport }) });
@@ -205,6 +206,20 @@ test("findStationsNear: none at that power says what the station figures reach; 
   const before = api.calls.length;
   await assert.rejects(findStationsNear(client, { ...KOELN_HBF, radiusKm: 2 }, { now: NOW, maxRows: 2 }), /4 stations to read, more than one call reads \(2\); use a smaller radiusKm/);
   assert.equal(api.calls.slice(before).map(paramsOf).filter((p) => p.has("resultOffset")).length, 0, "no page read");
+});
+
+test("a read of every station that gets fewer than it counted (the register changed, a page lost) is an error, not a short answer given as complete", async () => {
+  const rows = Array.from({ length: 5 }, (_, i) => stationRow(600 + i, `p${i}`, { coordinates_latitude: 52.52 + i / 10000, coordinates_longitude: 13.405, max_electric_power_station: "150", Steckersystem_Ladepunkt1: "DC Fahrzeugkupplung Typ Combo 2 (CCS) (150 kw)" }));
+  const api = registerApi({ rows, pageCap: 2 });
+  // The pages from the third station on come back empty.
+  const lossy = { transport: (request: Parameters<typeof api.transport>[0]) => (Number(paramsOf(request).get("resultOffset") ?? 0) >= 2 ? Promise.resolve(jsonResponse({ features: [] })) : api.transport(request)) };
+  const client = new LadesaeulenClient({ transport: lossy.transport });
+  const short = (err: unknown) => err instanceof LadesaeulenParseError && /answered 2 of the 5 stations it counted.*ask again/.test(err.message);
+  await assert.rejects(findStationsNear(client, { lat: 52.52, lon: 13.405, radiusKm: 5 }, { now: NOW }), short);
+  await assert.rejects(searchStations(client, { minPointKw: 100, limit: 0 }, { now: NOW }), short);
+  await assert.rejects(countStationsBy(client, { groupBy: "state", near: { lat: 52.52, lon: 13.405, radiusKm: 5 } }, { now: NOW }), short);
+  const whole = await findStationsNear(new LadesaeulenClient({ transport: api.transport }), { lat: 52.52, lon: 13.405, radiusKm: 5 }, { now: NOW });
+  assert.equal(whole.total, 5, "pages of 2 read to the end");
 });
 
 test("countStationsBy groups on the server, largest first; operator names with a trailing space are one group", async () => {

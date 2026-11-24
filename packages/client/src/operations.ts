@@ -20,7 +20,7 @@
 import type { LadesaeulenClient } from "./client.js";
 import { MAX_RADIUS_KM, MIN_RADIUS_KM } from "./client.js";
 import { emptyFieldsIn, EMPTY_FIELDS } from "./columns.js";
-import { LadesaeulenValidationError } from "./errors.js";
+import { LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
 import { CHARGE_POINT_FIELDS, connectorRatingsKw, maxChargePointKw, stationPowerKw } from "./power.js";
 import type { StationQuery } from "./types.js";
 import { assertValid, normalizeText, textProblem, tokenProblem, whereProblem, type Problem } from "./validate.js";
@@ -505,7 +505,9 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): num
 
 /**
  * Every row matching `where` (and `near`), read 2,000 per request in `OBJECTID` order, after a
- * count: more than `maxRows` is refused with what to narrow, before any row is read.
+ * count: more than `maxRows` is refused with what to narrow, before any row is read. A page that
+ * comes back empty before the count is reached (the register changed between the requests, or
+ * lost a page) is an error: the rows read would be a part given as the whole.
  */
 async function readAll(client: LadesaeulenClient, where: string, near: NearPoint | undefined, fields: readonly string[], maxRows: number, narrow: string): Promise<Record<string, unknown>[]> {
   const q: StationQuery = { where, ...(near === undefined ? {} : { near }) };
@@ -516,7 +518,9 @@ async function readAll(client: LadesaeulenClient, where: string, near: NearPoint
   const rows: Record<string, unknown>[] = [];
   while (rows.length < candidates) {
     const page = await client.stations({ ...q, outFields: fields.join(","), limit: PAGE, offset: rows.length, orderBy: "OBJECTID" });
-    if (page.features.length === 0) break;
+    if (page.features.length === 0) {
+      throw new LadesaeulenParseError(`The register answered ${rows.length} of the ${candidates} stations it counted: it changed while this call read it, or lost a page. Nothing is answered from a part; ask again.`);
+    }
     for (const f of page.features) rows.push(f.attributes as Record<string, unknown>);
   }
   return rows;
