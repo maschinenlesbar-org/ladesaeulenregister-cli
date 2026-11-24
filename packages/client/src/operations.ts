@@ -650,6 +650,7 @@ async function searchStationsOf(client: LadesaeulenClient, input: SearchStations
       notes,
     };
   }
+  notes.unshift(...pastTheEnd(offset, limit, total));
   const next = offset + stations.length;
   return { status: "ok", searched, total, stations, ...(limit > 0 && next < total ? { nextOffset: next } : {}), attribution: await attribution, notes };
 }
@@ -679,6 +680,11 @@ function placeNote(place: string | undefined, others: { place: string; stations:
   return [
     `place matches the whole name "${place}"; the register writes the place as the operator gave it, and other places contain it: ${others.slice(0, 5).map((o) => `${o.place} (${o.stations})`).join(", ")}. For a whole city, district ("Kreisfreie Stadt …") or postcode is surer.`,
   ];
+}
+
+/** The note for a page that starts past the last match: an empty list beside a total. */
+function pastTheEnd(offset: number, limit: number, total: number): string[] {
+  return limit > 0 && total > 0 && offset >= total ? [`offset ${offset} is past the last of the ${total} stations that match: the pages start at 0, the last at ${Math.floor((total - 1) / limit) * limit} (limit ${limit}).`] : [];
 }
 
 function emptyReason(f: StationFilter, near: NearPoint | undefined, suggested: boolean): string {
@@ -752,6 +758,7 @@ async function findStationsNearOf(client: LadesaeulenClient, input: FindStations
     }
     return { status: "empty", searched, total: 0, nearest: [], reason, attribution: await attribution, notes };
   }
+  notes.unshift(...pastTheEnd(offset, limit, kept.length));
   const next = offset + limit;
   return { status: "ok", searched, total: kept.length, nearest: kept.slice(offset, next), ...(next < kept.length ? { nextOffset: next } : {}), attribution: await attribution, notes };
 }

@@ -209,6 +209,19 @@ test("findStationsNear pages: nextOffset says where the farther stations go on, 
   assert.deepEqual(first.searched, { lat: 50.943, lon: 6.9589, radiusKm: 2 }, "the page is not a filter");
 });
 
+test("a page past the last station says so, not an \"ok\" with no stations and nothing else", async () => {
+  const { client } = clientOf();
+  const search = await searchStations(client, { place: "Köln", offset: 10 }, { now: NOW });
+  assert.deepEqual([search.status, search.total, search.stations, search.nextOffset], ["ok", 4, [], undefined]);
+  assert.match(search.notes[0] ?? "", /^offset 10 is past the last of the 4 stations that match: the pages start at 0/);
+  const near = await findStationsNear(client, { ...KOELN_HBF, radiusKm: 2, offset: 4 }, { now: NOW });
+  assert.match(near.notes[0] ?? "", /^offset 4 is past the last of the 4 stations that match/);
+  const count = await searchStations(client, { place: "Köln", offset: 10, limit: 0 }, { now: NOW });
+  assert.ok(!count.notes.some((n) => /past the last/.test(n)), "counting only lists no page");
+  const page = await searchStations(client, { place: "Köln", offset: 3 }, { now: NOW });
+  assert.ok(!page.notes.some((n) => /past the last/.test(n)));
+});
+
 test("findStationsNear: none at that power says what the station figures reach; a swapped point is named; too many to rank is refused before reading", async () => {
   const { api, client } = clientOf();
   const none = await findStationsNear(client, { ...KOELN_HBF, radiusKm: 1, minPointKw: 60 }, { now: NOW });
