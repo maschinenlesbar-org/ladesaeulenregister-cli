@@ -175,7 +175,7 @@ export const UNABLE = { error: { code: 400, message: "Unable to perform query. P
 type Tri = boolean | null;
 type Token = { kind: "str" | "num" | "id" | "op" | "kw"; text: string };
 
-const KEYWORDS = new Set(["AND", "OR", "NOT", "LIKE", "IS", "NULL", "CAST", "AS", "FLOAT", "INTEGER"]);
+const KEYWORDS = new Set(["AND", "OR", "NOT", "LIKE", "ESCAPE", "IS", "NULL", "CAST", "AS", "FLOAT", "INTEGER"]);
 
 function tokenize(sql: string): Token[] {
   const tokens: Token[] = [];
@@ -271,10 +271,25 @@ export function compileWhere(where: string): (row: Row) => Tri {
       default: return (x as number) < (y as number);
     }
   };
-  const like = (value: unknown, pattern: unknown): Tri => {
+  // `ESCAPE 'c'`: c before a character makes it match itself (`%`, `_`, c), as on the server.
+  const like = (value: unknown, pattern: unknown, escape?: string): Tri => {
     if (typeof value !== "string" || typeof pattern !== "string") return value === null || value === undefined ? null : false;
-    const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".")}$`, "is");
-    return re.test(value);
+    let source = "";
+    for (let i = 0; i < pattern.length; i++) {
+      const c = pattern[i] as string;
+      if (c === escape && i + 1 < pattern.length) source += (pattern[++i] as string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      else if (c === "%") source += ".*";
+      else if (c === "_") source += ".";
+      else source += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    return new RegExp(`^${source}$`, "is").test(value);
+  };
+  const escapeOf = (): string | undefined => {
+    if (peek()?.text !== "ESCAPE") return undefined;
+    take("ESCAPE");
+    const t = take();
+    if (t.kind !== "str" || t.text.length !== 1) throw new Error("ESCAPE takes one character");
+    return t.text;
   };
   const not = (v: Tri): Tri => (v === null ? null : !v);
   const primary = (): ((row: Row) => Tri) => {
@@ -292,12 +307,14 @@ export function compileWhere(where: string): (row: Row) => Tri {
     }
     if (t.text === "LIKE") {
       const right = operand();
-      return (row) => like(left(row), right(row));
+      const escape = escapeOf();
+      return (row) => like(left(row), right(row), escape);
     }
     if (t.text === "NOT") {
       take("LIKE");
       const right = operand();
-      return (row) => not(like(left(row), right(row)));
+      const escape = escapeOf();
+      return (row) => not(like(left(row), right(row), escape));
     }
     if (t.text === "IS") {
       const negated = peek()?.text === "NOT";

@@ -155,6 +155,15 @@ function literal(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/**
+ * A contains-match for `LIKE`: `'%…%'` with `%`, `_` and the escape character `\` in the value
+ * escaped (`ESCAPE '\'`), so they match themselves: a bare `_` would match every name, and the
+ * filter would answer for the whole register.
+ */
+function containing(value: string): string {
+  return `${literal(`%${value.replace(/[\\%_]/g, "\\$&")}%`)} ESCAPE '\\'`;
+}
+
 /** The six connector columns the register fills (7–10 are empty on every row). */
 const CONNECTOR_FIELDS = CHARGE_POINT_FIELDS.slice(0, 6);
 
@@ -205,7 +214,8 @@ function checkFilter(filter: StationFilter): StationFilter {
 
 /**
  * The register's SQL for checked filters (`1=1` for none). Values are string literals with their
- * quotes doubled; contains-matches are `LIKE '%…%'` (the server ignores case); DC is read from all
+ * quotes doubled; contains-matches are `LIKE '%…%'` with the value's `%` and `_` escaped (the
+ * server ignores case); DC is read from all
  * six connector columns, a NULL column counted as "no DC"; the go-live date is `dd.mm.yyyy` text,
  * so a year or month is a `LIKE`; power per charge point is narrowed by the station figure (cast,
  * since it is text), which is exact as the per-point figure is capped at it.
@@ -214,13 +224,16 @@ function whereOf(f: StationFilter): string {
   const parts: string[] = [];
   if (f.place !== undefined) parts.push(`Ort = ${literal(f.place)}`);
   if (f.postcode !== undefined) parts.push(f.postcode.length === 5 ? `Postleitzahl = ${literal(f.postcode)}` : `Postleitzahl LIKE ${literal(`${f.postcode}%`)}`);
-  if (f.district !== undefined) parts.push(`district_independent_city LIKE ${literal(`%${f.district}%`)}`);
+  if (f.district !== undefined) parts.push(`district_independent_city LIKE ${containing(f.district)}`);
   if (f.state !== undefined) parts.push(`state = ${literal(f.state)}`);
-  if (f.operator !== undefined) parts.push(`operator_companyName LIKE ${literal(`%${f.operator}%`)}`);
+  if (f.operator !== undefined) parts.push(`operator_companyName LIKE ${containing(f.operator)}`);
   if (f.type !== undefined) parts.push(`Typ = ${literal(f.type === "fast" ? "Schnellladeeinrichtung" : "Normalladeeinrichtung")}`);
   if (f.dc === true) parts.push(`(${CONNECTOR_FIELDS.map((c) => `${c} LIKE '%DC%'`).join(" OR ")})`);
   if (f.dc === false) parts.push(CONNECTOR_FIELDS.map((c) => `(${c} IS NULL OR ${c} NOT LIKE '%DC%')`).join(" AND "));
-  if (f.connector !== undefined) parts.push(`(${CONNECTOR_FIELDS.map((c) => `${c} LIKE ${literal(`%${f.connector}%`)}`).join(" OR ")})`);
+  if (f.connector !== undefined) {
+    const pattern = containing(f.connector);
+    parts.push(`(${CONNECTOR_FIELDS.map((c) => `${c} LIKE ${pattern}`).join(" OR ")})`);
+  }
   if (f.minPointKw !== undefined) parts.push(`CAST(max_electric_power_station AS FLOAT) >= ${f.minPointKw}`);
   if (f.goLiveYear !== undefined) {
     const month = f.goLiveMonth === undefined ? "" : `${String(f.goLiveMonth).padStart(2, "0")}.`;
@@ -612,7 +625,7 @@ export async function searchStations(client: LadesaeulenClient, input: SearchSta
 function otherPlaces(client: LadesaeulenClient, place: string | undefined): Promise<{ place: string; stations: number }[]> {
   if (place === undefined) return Promise.resolve([]);
   const pending = client
-    .countByPage("Ort", `Ort LIKE ${literal(`%${place}%`)}`)
+    .countByPage("Ort", `Ort LIKE ${containing(place)}`)
     .then(({ groups }) =>
       groups
         .filter((g): g is { value: string; count: number } => typeof g.value === "string" && g.value.trim().toLowerCase() !== place.toLowerCase())

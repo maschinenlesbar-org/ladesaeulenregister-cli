@@ -78,7 +78,8 @@ For scripts and shared configs, pin a release and its digest from the
 The filters (all tools on stations): `place` (the whole name), `postcode` (or its start),
 `district`, `state` (`BY`, `Bayern`, `Bavaria`, `NRW`), `operator` (a part of the company name),
 `type` (`normal`, `fast`), `dc`, `connector` (`CHAdeMO`, `Typ 2`), `minPointKw`, `goLiveYear` and
-`goLiveMonth`, and `where`, one more condition in the register's SQL.
+`goLiveMonth`, and `where`, one more condition in the register's SQL. In `district`, `operator`
+and `connector` a `%` or `_` is a character like any other, not a wildcard.
 
 The traps the tools handle: the power a car can get is `maxChargePointKw`, one charge point's
 rating, not `stationKw`, the operator's figure for the whole station, often the sum of its

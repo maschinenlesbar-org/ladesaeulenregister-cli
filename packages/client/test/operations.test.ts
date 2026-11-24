@@ -25,7 +25,7 @@ test("states are taken as codes or names, German or English, umlauts or not, and
 
 test("the filters become the register's SQL: quotes doubled, DC over all six charge points, the power figure cast, the go-live date as text", () => {
   assert.equal(stationWhere({}), "1=1");
-  assert.equal(stationWhere({ place: " Köln ", operator: "O'Neill" }), "Ort = 'Köln' AND operator_companyName LIKE '%O''Neill%'");
+  assert.equal(stationWhere({ place: " Köln ", operator: "O'Neill" }), "Ort = 'Köln' AND operator_companyName LIKE '%O''Neill%' ESCAPE '\\'");
   assert.equal(stationWhere({ dc: true }), "(" + [1, 2, 3, 4, 5, 6].map((i) => `Steckersystem_Ladepunkt${i} LIKE '%DC%'`).join(" OR ") + ")");
   assert.match(stationWhere({ dc: false }), /^\(Steckersystem_Ladepunkt1 IS NULL OR Steckersystem_Ladepunkt1 NOT LIKE '%DC%'\) AND .*Steckersystem_Ladepunkt6 NOT LIKE '%DC%'\)$/);
   assert.equal(stationWhere({ minPointKw: 150, type: "fast" }), "Typ = 'Schnellladeeinrichtung' AND CAST(max_electric_power_station AS FLOAT) >= 150");
@@ -36,6 +36,21 @@ test("the filters become the register's SQL: quotes doubled, DC over all six cha
   assert.throws(() => stationWhere({ postcode: "8080x" }), /postcode/);
   assert.throws(() => stationWhere({ place: "​" }), LadesaeulenValidationError);
   assert.throws(() => stationWhere({ type: "dc" as never }), /"normal" or "fast"/);
+});
+
+test("% and _ in operator, district and connector match themselves, not every station; so do they in a place's suggestions", async () => {
+  assert.equal(stationWhere({ operator: "50%_a\\b" }), "operator_companyName LIKE '%50\\%\\_a\\\\b%' ESCAPE '\\'");
+  const rows = [...registerRows(), stationRow(90002, "1600001", { operator_companyName: "Lade_Punkt GmbH", Ort: "Köln" })];
+  const { api, client } = clientOf(registerApi({ rows }));
+  const under = await searchStations(client, { operator: "_", limit: 0 }, { now: NOW });
+  assert.deepEqual([under.status, under.total], ["ok", 1], "only the operator with an underscore");
+  for (const filter of [{ operator: "%" }, { district: "%" }, { connector: "_" }, { district: "%", connector: "_" }]) {
+    const result = await searchStations(client, { ...filter, limit: 0 }, { now: NOW });
+    assert.deepEqual([result.status, result.total], ["empty", 0], JSON.stringify(filter));
+  }
+  const place = await searchStations(client, { place: "%" }, { now: NOW });
+  assert.deepEqual([place.status, place.suggestions], ["empty", undefined], "no place contains a %");
+  assert.ok(queries(api).some((p) => p.get("where") === "Ort LIKE '%\\%%' ESCAPE '\\'"), "the suggestions' query escapes it too");
 });
 
 test("a row becomes a station: the operator from the company name (Betreiber is null), trimmed; figures as numbers; the go-live date as ISO; connectors per point", () => {
