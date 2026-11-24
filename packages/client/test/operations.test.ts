@@ -29,7 +29,7 @@ test("the filters become the register's SQL: quotes doubled, DC over all six cha
   assert.equal(stationWhere({ place: " Köln ", operator: "O'Neill" }), "Ort = 'Köln' AND operator_companyName LIKE '%O''Neill%' ESCAPE '\\'");
   assert.equal(stationWhere({ dc: true }), "(" + [1, 2, 3, 4, 5, 6].map((i) => `Steckersystem_Ladepunkt${i} LIKE '%DC%'`).join(" OR ") + ")");
   assert.match(stationWhere({ dc: false }), /^\(Steckersystem_Ladepunkt1 IS NULL OR Steckersystem_Ladepunkt1 NOT LIKE '%DC%'\) AND .*Steckersystem_Ladepunkt6 NOT LIKE '%DC%'\)$/);
-  assert.equal(stationWhere({ minPointKw: 150, type: "fast" }), "Typ = 'Schnellladeeinrichtung' AND CAST(max_electric_power_station AS FLOAT) >= 150");
+  assert.equal(stationWhere({ minPointKw: 150, type: "fast" }), "Typ = 'Schnellladeeinrichtung' AND (max_electric_power_station IS NULL OR max_electric_power_station = '' OR CAST(max_electric_power_station AS FLOAT) >= 150)");
   assert.equal(stationWhere({ goLiveYear: 2026, goLiveMonth: 8 }), "go_live_date LIKE '%.08.2026'");
   assert.equal(stationWhere({ postcode: "80", state: "BY" }), "Postleitzahl LIKE '80%' AND state = 'Bayern'");
   assert.equal(stationWhere({ where: "Status = 'In Wartung'", postcode: "50667" }), "Postleitzahl = '50667' AND (Status = 'In Wartung')");
@@ -123,6 +123,15 @@ test("searchStations by power per charge point: the station sum doesn't count (J
   assert.deepEqual(result.stations.map((s) => [s.operator, s.maxChargePointKw, s.stationKw]), [["SWM Versorgungs GmbH", 400, 800], ["EnBW mobility+ AG und Co.KG", 300, 300]]);
   assert.equal(result.total, 2);
   assert.ok(result.notes.some((n) => /often the sum/.test(n)));
+});
+
+test("by power per charge point, a station without a station figure is decided by its connectors, not dropped by the server's narrowing", async () => {
+  const ccs = "DC Fahrzeugkupplung Typ Combo 2 (CCS) (300 kw)";
+  const rows = [...registerRows(), stationRow(4000001, "4000001", { Ort: "München", state: "Bayern", coordinates_latitude: 48.14, coordinates_longitude: 11.58, max_electric_power_station: null, Steckersystem_Ladepunkt1: ccs }), stationRow(4000002, "4000002", { Ort: "München", state: "Bayern", coordinates_latitude: 48.13, coordinates_longitude: 11.57, max_electric_power_station: "", Steckersystem_Ladepunkt1: ccs })];
+  const search = await searchStations(clientOf(registerApi({ rows })).client, { place: "München", minPointKw: 300 }, { now: NOW });
+  assert.deepEqual(search.stations.map((s) => [s.id, s.maxChargePointKw]).sort(), [["1100001", 400], ["1100003", 300], ["4000001", 300], ["4000002", 300]].sort());
+  const near = await findStationsNear(clientOf(registerApi({ rows })).client, { lat: 48.137, lon: 11.575, radiusKm: 50, minPointKw: 300 }, { now: NOW });
+  assert.ok(near.nearest.some((s) => s.id === "4000001") && near.nearest.some((s) => s.id === "4000002"), JSON.stringify(near.nearest.map((s) => s.id)));
 });
 
 test("searchStations: a place is the whole name; empty names what was searched and the places that contain it", async () => {

@@ -170,7 +170,8 @@ export interface StationQuery {
    * Only stations where one charge point can deliver at least this many kW
    * (`max_charge_point_kw >= minChargePointKw`; above 0, at most `MAX_CHARGE_POINT_KW`).
    * The server filters on the station figure (`CAST(max_electric_power_station AS FLOAT)
-   * >= n`, exact because `max_charge_point_kw` is capped at it), the client on the
+   * >= n`, exact because `max_charge_point_kw` is capped at it; a station without a figure
+   * passes), the client on the
    * connector ratings, which the server cannot read. The connector columns are added to
    * `outFields`. `limit`/`offset` page the server's rows, so a page can hold fewer rows
    * than `limit`; `count()` reads every candidate, 2,000 per request.

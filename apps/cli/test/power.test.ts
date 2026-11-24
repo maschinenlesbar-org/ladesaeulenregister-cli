@@ -70,7 +70,7 @@ test("minChargePointKw keeps the stations where one point reaches it, and says w
   assert.deepEqual(page.features.map((f) => f.attributes.ID), ["1009334"]);
   assert.equal(page.features[0]!.attributes.max_charge_point_kw, 300);
   const q = queryOf(mt.last());
-  assert.equal(q.get("where"), "(Ort='München') AND CAST(max_electric_power_station AS FLOAT) >= 300");
+  assert.equal(q.get("where"), "(Ort='München') AND (max_electric_power_station IS NULL OR max_electric_power_station = '' OR CAST(max_electric_power_station AS FLOAT) >= 300)", "a station without a figure is decided by its connectors");
   const fields = q.get("outFields")!.split(",");
   for (const f of ["ID", "max_electric_power_station", "Steckersystem_Ladepunkt1", "Steckersystem_Ladepunkt6"]) assert.ok(fields.includes(f), f);
 });

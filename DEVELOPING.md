@@ -379,8 +379,9 @@ replaced was quadratic on a long `a.a.…` run in an answer and ran past `--time
   (`… (160 kw)` per line) and derives `max_charge_point_kw` = the fastest rating, capped at
   the station figure (`maxChargePointKw`). The client adds it to every row that carries a
   connector column. `StationQuery.minChargePointKw` (`--min-point-kw`) filters on it: the
-  server gets `CAST(max_electric_power_station AS FLOAT) >= n` (exact, because of the cap),
-  the client checks the ratings and adds the connector columns to `outFields`; `count()`
+  server gets `(max_electric_power_station IS NULL OR max_electric_power_station = '' OR
+  CAST(max_electric_power_station AS FLOAT) >= n)` (`stationFigureAtLeast`; exact, because of the
+  cap, and a station without a figure is left to its connectors), the client checks the ratings and adds the connector columns to `outFields`; `count()`
   pages through the candidates (2,000 per request, `OBJECTID` order). A failure on a later
   page keeps its error class and fields, and its message ends `; page N of the
   minChargePointKw count (resultOffset O), after N-1 pages read`: the URL in the message is

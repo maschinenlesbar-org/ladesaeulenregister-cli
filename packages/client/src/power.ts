@@ -78,6 +78,17 @@ export function maxChargePointKw(attributes: Record<string, unknown>): number | 
   return station !== null && station < fastest ? station : fastest;
 }
 
+/**
+ * The server's narrowing for "one charge point reaches `minKw`" (the connector ratings it can't
+ * read are checked by the caller): the station figure is at least `minKw`, exact because
+ * {@link maxChargePointKw} is capped at it, or the station has no figure, so its connectors
+ * alone decide. Without that second part a station with 300 kW connectors and no figure was
+ * dropped before its ratings were read.
+ */
+export function stationFigureAtLeast(minKw: number): string {
+  return `(max_electric_power_station IS NULL OR max_electric_power_station = '' OR CAST(max_electric_power_station AS FLOAT) >= ${minKw})`;
+}
+
 /** True when the row carries at least one connector column (so the rating can be read). */
 export function hasChargePointFields(attributes: Record<string, unknown>): boolean {
   return CHARGE_POINT_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(attributes, field));

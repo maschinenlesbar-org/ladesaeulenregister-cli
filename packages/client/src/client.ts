@@ -25,7 +25,7 @@ import {
   tokenProblem,
   whereProblem,
 } from "./validate.js";
-import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw } from "./power.js";
+import { CHARGE_POINT_FIELDS, MAX_CHARGE_POINT_KW_FIELD, hasChargePointFields, maxChargePointKw, stationFigureAtLeast } from "./power.js";
 import type {
   ArcGisQueryResponse,
   CountByPage,
@@ -372,8 +372,8 @@ export class LadesaeulenClient {
     const p: QueryParams = { where, ...extra };
     if (q.minChargePointKw !== undefined) {
       // Exact, not a guess: max_charge_point_kw is capped at the station figure, so a row
-      // that passes has a station figure of at least the minimum.
-      p.where = `(${where}) AND CAST(max_electric_power_station AS FLOAT) >= ${q.minChargePointKw}`;
+      // that passes has a station figure of at least the minimum, or none.
+      p.where = `(${where}) AND ${stationFigureAtLeast(q.minChargePointKw)}`;
     }
     if (q.outFields !== undefined) {
       const fields = normalizeOutFields(q.outFields);

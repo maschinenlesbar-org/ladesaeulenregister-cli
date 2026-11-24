@@ -21,7 +21,7 @@ import type { LadesaeulenClient } from "./client.js";
 import { MAX_RADIUS_KM, MIN_RADIUS_KM } from "./client.js";
 import { emptyFieldsIn, EMPTY_FIELDS } from "./columns.js";
 import { LadesaeulenApiError, LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
-import { CHARGE_POINT_FIELDS, connectorRatingsKw, maxChargePointKw, stationPowerKw } from "./power.js";
+import { CHARGE_POINT_FIELDS, connectorRatingsKw, maxChargePointKw, stationFigureAtLeast, stationPowerKw } from "./power.js";
 import type { StationQuery } from "./types.js";
 import { assertValid, normalizeText, textProblem, tokenProblem, whereProblem, type Problem } from "./validate.js";
 
@@ -218,7 +218,8 @@ function checkFilter(filter: StationFilter): StationFilter {
  * server ignores case); DC is read from all
  * six connector columns, a NULL column counted as "no DC"; the go-live date is `dd.mm.yyyy` text,
  * so a year or month is a `LIKE`; power per charge point is narrowed by the station figure (cast,
- * since it is text), which is exact as the per-point figure is capped at it.
+ * since it is text), which is exact as the per-point figure is capped at it; a station without a
+ * figure passes, its connectors decide.
  */
 function whereOf(f: StationFilter): string {
   const parts: string[] = [];
@@ -234,7 +235,7 @@ function whereOf(f: StationFilter): string {
     const pattern = containing(f.connector);
     parts.push(`(${CONNECTOR_FIELDS.map((c) => `${c} LIKE ${pattern}`).join(" OR ")})`);
   }
-  if (f.minPointKw !== undefined) parts.push(`CAST(max_electric_power_station AS FLOAT) >= ${f.minPointKw}`);
+  if (f.minPointKw !== undefined) parts.push(stationFigureAtLeast(f.minPointKw));
   if (f.goLiveYear !== undefined) {
     const month = f.goLiveMonth === undefined ? "" : `${String(f.goLiveMonth).padStart(2, "0")}.`;
     parts.push(`go_live_date LIKE ${literal(`%.${month}${f.goLiveYear}`)}`);
