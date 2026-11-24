@@ -88,9 +88,10 @@ read from the connectors of all six charge points; the operator is the company n
 brand can appear under several; the go-live date is `dd.mm.yyyy` text, filtered by year or month.
 
 Every tool only reads. An answer is JSON (`structuredContent` and the same as text), with the
-`source` it came from and the data licence. A text over 2000 characters is cut and ends in `…[cut, N
-characters in all]`, and the answer says `truncated`. A failure is a tool error that says what to
-change (one over 5000 characters loses its middle, never its end, where the reason is).
+`source` it came from (whole, never cut like the data) and the data licence. A text over 2000
+characters is cut and ends in `…[cut, N characters in all]`, and the answer says `truncated`. A
+failure is a tool error that says what to change (one over 5000 characters loses its middle, never
+its end, where the reason is).
 
 ## Options
 
