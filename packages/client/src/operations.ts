@@ -20,7 +20,7 @@
 import type { LadesaeulenClient } from "./client.js";
 import { MAX_RADIUS_KM, MIN_RADIUS_KM } from "./client.js";
 import { emptyFieldsIn, EMPTY_FIELDS } from "./columns.js";
-import { LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
+import { LadesaeulenApiError, LadesaeulenParseError, LadesaeulenValidationError } from "./errors.js";
 import { CHARGE_POINT_FIELDS, connectorRatingsKw, maxChargePointKw, stationPowerKw } from "./power.js";
 import type { StationQuery } from "./types.js";
 import { assertValid, normalizeText, textProblem, tokenProblem, whereProblem, type Problem } from "./validate.js";
@@ -346,6 +346,29 @@ function filterNotes(f: StationFilter): string[] {
   return notes;
 }
 
+/**
+ * `run`, with a 400 from the server for a call with a `where` of one's own said to be about that
+ * where: the register answers SQL it can't read (an unknown column, a text column compared with
+ * a number) with "Unable to perform query. Please check your parameters." only, and the where is
+ * the one parameter a caller wrote as SQL.
+ */
+async function explainingWhere<T>(where: unknown, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (where === undefined || !(err instanceof LadesaeulenApiError) || (err.arcgisCode ?? err.status) !== 400) throw err;
+    throw new LadesaeulenApiError({
+      url: err.url,
+      method: err.method,
+      body: err.body,
+      status: err.status,
+      arcgisCode: err.arcgisCode,
+      detail: `${err.detail ?? "the server refused the query"} The likely cause is the where given: a column the register doesn't have, or SQL it can't read (text columns hold numbers: CAST). getRegisterInfo lists the columns and their types.`,
+      retries: err.retries,
+    });
+  }
+}
+
 // ---- stations -------------------------------------------------------------------------------
 
 /** The columns a station is read with. */
@@ -583,6 +606,10 @@ export const DEFAULT_SEARCH_LIMIT = 20;
  * whose name contains it (`Frankfurt` → `Frankfurt am Main`).
  */
 export async function searchStations(client: LadesaeulenClient, input: SearchStationsInput = {}, options: OperationOptions = {}): Promise<StationSearch> {
+  return explainingWhere(input?.where, () => searchStationsOf(client, input, options));
+}
+
+async function searchStationsOf(client: LadesaeulenClient, input: SearchStationsInput, options: OperationOptions): Promise<StationSearch> {
   const f = checkFilter(input);
   const near = input.near === undefined ? undefined : checkNear(input.near);
   const limit = assertValid("limit", input.limit ?? DEFAULT_SEARCH_LIMIT, integerIn(0, 100));
@@ -700,6 +727,10 @@ export const DEFAULT_NEAR_LIMIT = 10;
  * found in the radius. Paged: `offset` skips the nearest, `nextOffset` says where the farther go on.
  */
 export async function findStationsNear(client: LadesaeulenClient, input: FindStationsNearInput, options: OperationOptions = {}): Promise<StationsNear> {
+  return explainingWhere(input?.where, () => findStationsNearOf(client, input, options));
+}
+
+async function findStationsNearOf(client: LadesaeulenClient, input: FindStationsNearInput, options: OperationOptions): Promise<StationsNear> {
   const f = checkFilter(input);
   const near = checkNear({ lat: input.lat, lon: input.lon, radiusKm: input.radiusKm });
   const limit = assertValid("limit", input.limit ?? DEFAULT_NEAR_LIMIT, integerIn(1, 50));
@@ -801,6 +832,10 @@ export interface StationCounts {
  * brands; `Betreiber`, null on more than half of the rows, is never used.
  */
 export async function countStationsBy(client: LadesaeulenClient, input: CountStationsByInput, options: OperationOptions = {}): Promise<StationCounts> {
+  return explainingWhere(input?.where, () => countStationsByOf(client, input, options));
+}
+
+async function countStationsByOf(client: LadesaeulenClient, input: CountStationsByInput, options: OperationOptions): Promise<StationCounts> {
   const groupBy = input.groupBy;
   const column = typeof groupBy === "string" && Object.prototype.hasOwnProperty.call(GROUP_COLUMNS, groupBy) ? (GROUP_COLUMNS[groupBy] as string) : undefined;
   if (column === undefined) throw new LadesaeulenValidationError(`Invalid groupBy: expected one of ${Object.keys(GROUP_COLUMNS).join(", ")}, got ${JSON.stringify(groupBy)}.`);

@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { LadesaeulenClient } from "../src/client.js";
-import { LadesaeulenError, LadesaeulenParseError, LadesaeulenValidationError } from "../src/errors.js";
+import { LadesaeulenApiError, LadesaeulenError, LadesaeulenParseError, LadesaeulenValidationError } from "../src/errors.js";
 import { countStationsBy, findStationsNear, getRegisterInfo, getStation, resolveState, searchStations, stationsToGeoJson, stationWhere, toStation } from "../src/operations.js";
 import { paramsOf, registerApi, registerRows, stationRow } from "./fixtures.js";
 import { jsonResponse } from "./helpers.js";
@@ -171,6 +171,20 @@ test("a where naming a column that is empty on every row gets a note; SQL the se
   const result = await searchStations(client, { where: "json_type IS NULL", limit: 0 }, { now: NOW });
   assert.ok(result.notes.some((n) => /json_type is empty on every row/.test(n)));
   await assert.rejects(searchStations(client, { where: "max_electric_power_station >>= 1" }), (err: unknown) => err instanceof LadesaeulenError && /ArcGIS error 400/.test(err.message));
+});
+
+test("a where the server can't read gets an error that names the where and where the columns are listed, not only 'check your parameters'", async () => {
+  const { client } = clientOf();
+  const names = (err: unknown) => err instanceof LadesaeulenApiError && err.arcgisCode === 400 && /Unable to perform query\. Please check your parameters\..*the where given.*getRegisterInfo lists the columns/.test(err.message);
+  await assert.rejects(searchStations(client, { where: "Leistung > 50", limit: 0 }, { now: NOW }), names);
+  await assert.rejects(findStationsNear(client, { ...KOELN_HBF, radiusKm: 2, where: "Leistung > 50" }, { now: NOW }), names);
+  await assert.rejects(countStationsBy(client, { groupBy: "state", where: "Leistung > 50" }, { now: NOW }), names);
+  // Without a where of one's own, the server's error stays as it is.
+  const bad = clientOf(registerApi({ rows: [stationRow(1, "x")] }));
+  bad.client.count = async () => {
+    throw new LadesaeulenApiError({ url: "https://example.test/0/query", method: "GET", body: "", arcgisCode: 400, detail: "Unable to perform query. Please check your parameters." });
+  };
+  await assert.rejects(searchStations(bad.client, { place: "Berlin" }, { now: NOW }), (err: unknown) => err instanceof LadesaeulenApiError && !/where/.test(err.message));
 });
 
 test("findStationsNear ranks by distance, nearest first, with the distance; filters and power per point apply", async () => {

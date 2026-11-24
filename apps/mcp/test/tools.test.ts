@@ -172,3 +172,11 @@ test("getStationMap: a station without coordinates is an unlocated feature in it
   assert.equal((next["features"] as { id: string }[])[0]?.id, `m${kept}`, "none skipped or read twice");
   await connection.close();
 });
+
+test("a where the register can't read is a tool error that says to check the where, with getRegisterInfo for the columns", async () => {
+  const connection = await connect({ transport: registerApi() });
+  const result = await connection.call("searchStations", { where: "Leistung > 50", limit: 0 });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0]?.text ?? "", /Unable to perform query.*the where given.*getRegisterInfo lists the columns/);
+  await connection.close();
+});
