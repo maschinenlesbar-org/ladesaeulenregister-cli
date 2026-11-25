@@ -168,8 +168,11 @@ https://services-eu1.arcgis.com/TJm8oSvOdJUQvQT5/arcgis/rest/services/Ladesaeule
 - **Every transport is held to the same contract** (`engine.ts`), so a custom one (a
   `fetch` adapter, a test double) needs none of it itself: each call runs under the
   overall `timeoutMs` deadline (the request carries an `AbortSignal`,
-  `HttpRequest.signal`, that fires then, and the call rejects at the deadline whether
-  the transport stops or not); `maxResponseBytes` is checked on the body it returns
+  `HttpRequest.signal`, that fires then, aborted with the timeout error as its reason, and the
+  call rejects at the deadline whether the transport stops or not; the default transport stops
+  with the signal's reason, and for a signal some other caller aborted (the MCP server's tool
+  call: its deadline, a cancellation) it says "Request aborted by its caller before it
+  finished", never a timeout it didn't have); `maxResponseBytes` is checked on the body it returns
   (`GET <url> failed: Response exceeded the size limit of N bytes (maxResponseBytes;
   --max-response-bytes on the CLI)`; the default transport joins small chunks as they arrive,
   every 1024 chunks or 64 KiB, so its memory follows the bytes of an answer, not the number of
